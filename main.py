@@ -509,7 +509,8 @@ def generate_chat_response(document_id, user_message):
             document_id=document_id,
             user_id=session.get('user', {}).get('email', 'guest'),
             message_type='user',
-            content=user_message
+            content=user_message,
+            language=language
         )
         
         db.session.add(user_chat_message)
@@ -534,7 +535,8 @@ def generate_chat_response(document_id, user_message):
                 document_id=document_id,
                 user_id=session.get('user', {}).get('email', 'guest'),
                 message_type='assistant',
-                content=response_text
+                content=response_text,
+                language=language
             )
             
             db.session.add(assistant_chat_message)
@@ -554,7 +556,8 @@ def generate_chat_response(document_id, user_message):
                 document_id=document_id,
                 user_id=session.get('user', {}).get('email', 'guest'),
                 message_type='assistant',
-                content=f"I'm sorry, I couldn't generate a response at this time due to a technical issue. Please try again in a moment."
+                content=f"I'm sorry, I couldn't generate a response at this time due to a technical issue. Please try again in a moment.",
+                language=language
             )
             
             db.session.add(error_response)
@@ -605,17 +608,32 @@ def generate_initial_chat_message(document):
             logger.error(f"OpenAI API key validation failed: {error}")
             return None
             
-        # Get user settings for language preference
-        settings = get_user_settings()
-        language = settings.language
+        # Try to use document language first, then fall back to user settings
+        try:
+            language = document.language
+            
+            # If document language is not set, fall back to user settings
+            if not language:
+                settings = get_user_settings()
+                language = settings.language
+        except Exception as lang_error:
+            logger.error(f"Error retrieving language settings: {lang_error}")
+            language = 'en'  # Default to English on error
         
         # Map language codes to language names for the prompt
         language_names = {
             'en': 'English',
-            'fa': 'Farsi',
-            'de': 'German',
+            'es': 'Spanish',
             'fr': 'French',
-            'es': 'Spanish'
+            'de': 'German',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'ru': 'Russian',
+            'zh': 'Chinese',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'ar': 'Arabic',
+            'hi': 'Hindi'
         }
         
         # Default to English if language is not in our mapping
@@ -648,12 +666,13 @@ def generate_initial_chat_message(document):
             # Extract the response text
             welcome_message = response.choices[0].message.content
             
-            # Save the assistant message to the database
+            # Save the assistant message to the database with language
             assistant_chat_message = ChatMessage(
                 document_id=document.id,
                 user_id=document.user_id or 'system',
                 message_type='assistant',
-                content=welcome_message
+                content=welcome_message,
+                language=language
             )
             
             db.session.add(assistant_chat_message)
@@ -669,12 +688,13 @@ def generate_initial_chat_message(document):
             # Create a fallback welcome message
             fallback_message = f"Welcome to the document chat for '{document.filename}'. I'm currently experiencing some technical difficulties with my AI service. Please try asking a question anyway, and I'll do my best to help when the service is restored."
             
-            # Save the fallback message to the database
+            # Save the fallback message to the database with language
             assistant_chat_message = ChatMessage(
                 document_id=document.id,
                 user_id=document.user_id or 'system',
                 message_type='assistant',
-                content=fallback_message
+                content=fallback_message,
+                language=language
             )
             
             db.session.add(assistant_chat_message)
@@ -732,10 +752,17 @@ def generate_summary(text):
         # Map language codes to language names for the prompt
         language_names = {
             'en': 'English',
-            'fa': 'Farsi',
-            'de': 'German',
+            'es': 'Spanish',
             'fr': 'French',
-            'es': 'Spanish'
+            'de': 'German',
+            'it': 'Italian',
+            'pt': 'Portuguese',
+            'ru': 'Russian',
+            'zh': 'Chinese',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'ar': 'Arabic',
+            'hi': 'Hindi'
         }
         
         # Default to English if language is not in our mapping
