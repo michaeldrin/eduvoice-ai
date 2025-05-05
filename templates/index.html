@@ -79,61 +79,9 @@
 <body class="{{ accessibility_classes }}">
     <!-- Reading ruler for accessibility (only shown if enabled) -->
     <div class="reading-ruler"></div>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="/">
-                <img src="{{ url_for('static', filename='eduvoice-logo.svg') }}" alt="EduVoice Logo" height="30" class="me-2">
-                <span>EduVoice</span>
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/"><i class="bi bi-house-fill me-1"></i> Home</a>
-                    </li>
-                    
-                    {% if is_logged_in %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/upload"><i class="bi bi-upload me-1"></i> Upload</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/dashboard"><i class="bi bi-table me-1"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/settings"><i class="bi bi-gear-fill me-1"></i> Settings</a>
-                    </li>
-                    
-                    <!-- User is logged in -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {% if user.picture %}
-                            <img src="{{ user.picture }}" alt="Profile" class="rounded-circle me-2" width="24" height="24">
-                            {% else %}
-                            <i class="bi bi-person-circle me-2"></i>
-                            {% endif %}
-                            {{ user.name if user.name else user.email }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Profile</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
-                        </ul>
-                    </li>
-                    {% else %}
-                    <!-- User is not logged in -->
-                    <li class="nav-item">
-                        <a class="nav-link btn btn-outline-primary btn-sm px-3 py-2 ms-2" href="/login">
-                            <i class="bi bi-google me-2"></i>Login with Google
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
+    
+    <!-- Include the new navbar component -->
+    {% include 'components/navbar.html' %}
     
     <!-- Main Content -->
     <div class="container">

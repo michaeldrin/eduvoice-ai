@@ -433,7 +433,8 @@ def home_page():
         message=message,
         error=error,
         request=request,
-        usage_stats=user_settings
+        usage_stats=user_settings,
+        user=session.get('user', {})  # Ensure user is always defined
     )
 
 @app.route('/upload', methods=['GET', 'POST'])
