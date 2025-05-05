@@ -946,10 +946,12 @@ def auto_process_document(document):
                 logger.exception(f"Error during audio generation: {audio_error}")
                 # Continue with partial processing
         
-        # Generate initial chat message
+        # Generate initial chat message in document's language
         try:
-            logger.info(f"Generating initial chat message for document {document.id}")
-            welcome_message = generate_initial_chat_message(document)
+            # Use the document's language if available
+            document_language = document.language or 'en'
+            logger.info(f"Generating initial chat message for document {document.id} in language: {document_language}")
+            welcome_message = generate_initial_chat_message(document, document_language)
             if not welcome_message:
                 logger.warning(f"Failed to generate welcome message for document {document.id}")
                 # Continue processing even if welcome message fails
@@ -1699,19 +1701,22 @@ def document_chat(document_id):
         # Get the chat messages for this document
         chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
         
+        # Get user settings
+        user_settings = get_user_settings()
+        
         # If no chat messages exist yet, auto-generate a welcome message
         if not chat_messages and document.text_content:
             try:
-                logger.info(f"Generating initial welcome message for document {document_id}")
-                welcome_message = generate_initial_chat_message(document)
+                # Use user's preferred language for the welcome message
+                preferred_language = user_settings.language if user_settings else 'en'
+                
+                logger.info(f"Generating initial welcome message for document {document_id} in language {preferred_language}")
+                welcome_message = generate_initial_chat_message(document, preferred_language)
                 if welcome_message:
                     # Reload the chat messages to include the new welcome message
                     chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
             except Exception as e:
                 logger.error(f"Error generating welcome message: {e}")
-        
-        # Get user settings
-        user_settings = get_user_settings()
         
         # Render the chat template
         return render_template(
