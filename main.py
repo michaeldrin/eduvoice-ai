@@ -326,23 +326,46 @@ def summarize_text():
             error=f"Failed to generate summary: {error}"
         )
     
+    # Generate a unique file identifier for summary text and audio files
+    base_filename = os.path.splitext(filename)[0]
+    unique_id = uuid.uuid4().hex[:8]
+    safe_base_filename = secure_filename(f"{base_filename}_{unique_id}")
+    
+    # Save the summary to a text file for downloading
+    text_filename = f"{safe_base_filename}.txt"
+    text_file_path = os.path.join('static', 'summaries', text_filename)
+    
+    # Create the summaries directory if it doesn't exist
+    os.makedirs(os.path.join('static', 'summaries'), exist_ok=True)
+    
+    # Write the summary to a text file
+    try:
+        with open(text_file_path, 'w', encoding='utf-8') as f:
+            f.write(f"Summary of {filename}\n")
+            f.write(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("-" * 50 + "\n\n")
+            f.write(summary)
+        logger.info(f"Summary text file created: {text_filename}")
+    except Exception as e:
+        logger.error(f"Error creating summary text file: {e}")
+        text_filename = None
+    
     # Generate audio from the summary text
     audio_file = None
     audio_error = None
     
     if summary:
-        # Create a unique audio filename based on the document name
-        base_filename = os.path.splitext(filename)[0]
-        safe_filename = secure_filename(f"{base_filename}_summary")
+        # Use the same base filename for audio to match the text file
+        safe_audio_filename = f"{safe_base_filename}"
         
         # Convert the summary to speech
-        audio_file, audio_error = text_to_speech(summary, safe_filename)
+        audio_file, audio_error = text_to_speech(summary, safe_audio_filename)
         
         if audio_error:
             logger.error(f"Error in text-to-speech conversion: {audio_error}")
             # We'll continue without audio if there's an error, but we'll include the error message
     
-    # Render summary template with the audio file if available
+    # Render summary template with the audio file and summary text file if available
     return render_template(
         "summary.html",
         title="Document Summary",
@@ -353,7 +376,8 @@ def summarize_text():
         truncated=truncated,
         summary=summary,
         audio_file=audio_file,
-        audio_error=audio_error
+        audio_error=audio_error,
+        text_filename=text_filename
     )
 
 # Add upload link to the homepage
@@ -373,6 +397,34 @@ def serve_audio(filename):
     Serve audio files directly
     """
     return send_from_directory('static/audio', filename)
+
+# Download a summary text file
+@app.route('/download/summary/<path:filename>')
+def download_summary_text(filename):
+    """
+    Download a summary text file
+    """
+    logger.info(f"Downloading summary text file: {filename}")
+    return send_from_directory(
+        'static/summaries',
+        filename,
+        as_attachment=True,
+        download_name=filename
+    )
+
+# Download an audio file
+@app.route('/download/audio/<path:filename>')
+def download_audio(filename):
+    """
+    Download an audio file
+    """
+    logger.info(f"Downloading audio file: {filename}")
+    return send_from_directory(
+        'static/audio',
+        filename,
+        as_attachment=True,
+        download_name=filename
+    )
 
 # Error handling
 @app.errorhandler(404)
