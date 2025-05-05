@@ -3,6 +3,7 @@ import os
 import datetime
 import uuid
 import traceback  # For enhanced error reporting
+import requests  # For API calls and error handling
 import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
@@ -319,22 +320,53 @@ def generate_chat_response(document_id, user_message):
     Returns:
         tuple: (response_text, error_message)
     """
+    # Initialize these variables to track if we need to roll back transactions on error
+    user_chat_message = None
+    assistant_chat_message = None
+    transaction_started = False
+    
     try:
-        # Get the document from database
-        document = Document.query.get(document_id)
-        if not document or not document.text_content:
-            logger.error(f"Document not found or has no content: {document_id}")
-            return None, "Document not found or has no content to chat about."
+        # Input validation
+        if not document_id:
+            logger.error("Missing document_id parameter")
+            return None, "Missing document ID"
+            
+        if not user_message or not user_message.strip():
+            logger.error("Empty user message")
+            return None, "Please enter a question or message to continue the conversation."
+            
+        # Get the document from database with error handling
+        try:
+            document = Document.query.get(document_id)
+            if not document:
+                logger.error(f"Document not found: {document_id}")
+                return None, "Document not found. It may have been deleted."
+                
+            if not document.text_content:
+                logger.error(f"Document has no content: {document_id}")
+                return None, "This document has no text content to chat about. Please try with a different document."
+        except Exception as db_error:
+            logger.exception(f"Database error retrieving document: {db_error}")
+            return None, "Could not access document information. Please try again later."
         
         # Get OpenAI client
         client, error = validate_openai_api()
         if error:
             logger.error(f"OpenAI API key validation failed: {error}")
+            
+            # Include API key instructions in debug mode
+            if app.debug:
+                error_details = f"{error} Please check that your OPENAI_API_KEY is set correctly in the Replit Secrets."
+                return None, error_details
             return None, error
             
         # Get user settings for language preference
-        settings = get_user_settings()
-        language = settings.language
+        try:
+            settings = get_user_settings()
+            language = settings.language
+        except Exception as settings_error:
+            logger.error(f"Error retrieving user settings: {settings_error}")
+            language = 'en'  # Default to English on error
         
         # Map language codes to language names for the prompt
         language_names = {
@@ -342,37 +374,69 @@ def generate_chat_response(document_id, user_message):
             'fa': 'Farsi',
             'de': 'German',
             'fr': 'French',
-            'es': 'Spanish'
+            'es': 'Spanish',
+            'it': 'Italian',
+            'ar': 'Arabic',
+            'zh-CN': 'Chinese',
+            'ja': 'Japanese'
         }
         
         # Default to English if language is not in our mapping
         language_name = language_names.get(language, 'English')
         
-        # Get all previous chat messages for context
-        chat_history = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        # Get all previous chat messages for context with error handling
+        try:
+            chat_history = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        except Exception as history_error:
+            logger.exception(f"Error retrieving chat history: {history_error}")
+            chat_history = []  # Use empty history as fallback
+        
+        # Get document content and truncate if needed
+        max_content_length = 10000  # Limit to avoid token limits
+        document_content = document.text_content[:max_content_length]
+        if len(document.text_content) > max_content_length:
+            document_content += " [Content truncated due to length...]"
         
         # Create the system prompt
         system_prompt = f"""You are an intelligent assistant that helps users understand the content of documents.
         Respond in {language_name}.
         The document content is provided below. Use it to answer the user's questions.
-        Be concise, accurate, and helpful. If you don't know the answer, say so.
+        Be concise, accurate, and helpful. If you don't know the answer based on the document, say so.
+        Do not make up information that is not in the document.
         
         DOCUMENT CONTENT:
-        {document.text_content[:10000]}  # Limit to 10000 chars to avoid token limits
+        {document_content}
         """
         
         # Build conversation history
         messages = [{"role": "system", "content": system_prompt}]
         
         # Add chat history for context (up to the last 10 messages)
-        for message in chat_history[-10:]:
-            messages.append({
-                "role": "user" if message.message_type == "user" else "assistant",
-                "content": message.content
-            })
+        # Only include most recent messages to stay within token limits
+        if chat_history:
+            for message in chat_history[-10:]:
+                messages.append({
+                    "role": "user" if message.message_type == "user" else "assistant",
+                    "content": message.content
+                })
         
         # Add the current user message
         messages.append({"role": "user", "content": user_message})
+        
+        # Start a transaction for database operations
+        transaction_started = True
+        
+        # First, save the user message immediately, so we have a record even if the API call fails
+        user_chat_message = ChatMessage(
+            document_id=document_id,
+            user_id=session.get('user', {}).get('email', 'guest'),
+            message_type='user',
+            content=user_message
+        )
+        
+        db.session.add(user_chat_message)
+        db.session.commit()
+        logger.debug(f"User message saved to database for document {document_id}")
         
         try:
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
@@ -380,20 +444,14 @@ def generate_chat_response(document_id, user_message):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                max_tokens=500
+                max_tokens=500,
+                timeout=30  # Add timeout to prevent long-running requests
             )
             
             # Extract the response text
             response_text = response.choices[0].message.content
             
-            # Save the user message and response to the database
-            user_chat_message = ChatMessage(
-                document_id=document_id,
-                user_id=session.get('user', {}).get('email', 'guest'),
-                message_type='user',
-                content=user_message
-            )
-            
+            # Save only the assistant response to the database (user message already saved)
             assistant_chat_message = ChatMessage(
                 document_id=document_id,
                 user_id=session.get('user', {}).get('email', 'guest'),
@@ -401,41 +459,52 @@ def generate_chat_response(document_id, user_message):
                 content=response_text
             )
             
-            db.session.add(user_chat_message)
             db.session.add(assistant_chat_message)
             db.session.commit()
+            transaction_started = False
             
-            logger.info(f"Chat message generated for document {document_id}")
+            logger.info(f"Chat response generated for document {document_id}")
             return response_text, None
             
         except Exception as api_error:
+            # Handle API errors
             error_message = handle_openai_error(api_error)
             logger.error(f"OpenAI API error in chat response: {error_message}")
             
-            # Save the user message and an error response to the database
-            user_chat_message = ChatMessage(
-                document_id=document_id,
-                user_id=session.get('user', {}).get('email', 'guest'),
-                message_type='user',
-                content=user_message
-            )
-            
+            # Save an error response to the database (user message already saved)
             error_response = ChatMessage(
                 document_id=document_id,
                 user_id=session.get('user', {}).get('email', 'guest'),
                 message_type='assistant',
-                content=f"Sorry, I couldn't generate a response at this time: {error_message}"
+                content=f"I'm sorry, I couldn't generate a response at this time due to a technical issue. Please try again in a moment."
             )
             
-            db.session.add(user_chat_message)
             db.session.add(error_response)
             db.session.commit()
+            transaction_started = False
             
-            return None, error_message
+            if app.debug:
+                # Return detailed error in debug mode
+                return None, f"API Error: {error_message}"
+            else:
+                return None, "The AI service is currently unavailable. Please try again later."
         
     except Exception as e:
-        logger.exception(f"Error generating chat response: {e}")
-        return None, f"Error generating response: {str(e)}"
+        # General error handling
+        logger.exception(f"Unexpected error in chat response generation: {e}")
+        
+        # If we were in the middle of a transaction, roll it back
+        if transaction_started:
+            try:
+                db.session.rollback()
+            except Exception as rollback_error:
+                logger.error(f"Error during transaction rollback: {rollback_error}")
+        
+        if app.debug:
+            # Return detailed error in debug mode
+            return None, f"Error: {str(e)}"
+        else:
+            return None, "An unexpected error occurred. Please try again later."
 
 # Helper function to generate an initial welcome message for document chat
 def generate_initial_chat_message(document):
