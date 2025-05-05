@@ -42,8 +42,10 @@ class Document(db.Model):
     auto_processed = db.Column(db.Boolean, default=False)  # Flag to track if auto-processing was done
     
     # Language support
-    language = db.Column(db.String(10), default='en')  # Default: English
+    language = db.Column(db.String(10), default='en')  # Default: English - original document language
+    translated_language = db.Column(db.String(10), nullable=True)  # Target language for translation
     translated_summary = db.Column(db.Text, nullable=True)  # Store the translated summary
+    translated_content = db.Column(db.Text, nullable=True)  # Store the translated text content
     
     # Relationship with chat messages
     chat_messages = db.relationship('ChatMessage', backref='document', lazy=True, cascade="all, delete-orphan")
@@ -59,13 +61,15 @@ class Document(db.Model):
             'filename': self.filename,
             'filetype': self.filetype,
             'summary': self.summary,
-            'translated_summary': self.translated_summary,
             'text_filename': self.text_filename,
             'audio_filename': self.audio_filename,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S'),
             'auto_processed': self.auto_processed,
             'has_chat': self.text_content is not None,
-            'language': self.language
+            'language': self.language,
+            'translated_language': self.translated_language,
+            'translated_summary': self.translated_summary,
+            'has_translated_content': self.translated_content is not None
         }
 
 class UserSettings(db.Model):

@@ -1,0 +1,5 @@
+Summary of Muster-DSH_LV_Aufgaben.pdf
+Generated on: 2025-05-05 19:15:32
+--------------------------------------------------
+
+This text is an exam with a focus on reading comprehension about the topic of service robots and mechatronics. There are several questions related to a passage about service robots named MARGe and BARt-UH, asking about their purpose, development, differences, and the benefits of household robots over current service robots. It also includes tasks like identifying disciplines that form mechatronics and filling in gaps about the function of shock absorbers. Furthermore, matching subheadings to text sections is part of the test.

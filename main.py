@@ -715,9 +715,17 @@ def generate_initial_chat_message(document, language=None):
         return None
 
 # Helper function to generate summary from text using OpenAI
-def generate_summary(text):
+def generate_summary(text, target_language=None):
     """
     Generate a summary of the provided text using OpenAI API
+    
+    Args:
+        text (str): The text to summarize
+        target_language (str, optional): Language code for the summary. 
+                                       If None, uses user preference.
+    
+    Returns:
+        tuple: (summary_text, error_message)
     """
     try:
         # Check if the text is empty
@@ -753,9 +761,11 @@ def generate_summary(text):
                 # In production, just return the error
                 return None, error
             
-        # Get user settings for language preference
-        settings = get_user_settings()
-        language = settings.language
+        # Determine language for summarization
+        if target_language is None:
+            # Use user settings if no language specified
+            settings = get_user_settings()
+            target_language = settings.language
         
         # Map language codes to language names for the prompt
         language_names = {
@@ -774,21 +784,23 @@ def generate_summary(text):
         }
         
         # Default to English if language is not in our mapping
-        language_name = language_names.get(language, 'English')
+        language_name = language_names.get(target_language, 'English')
+        logger.info(f"Generating summary in {language_name}")
         
         try:
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
-            prompt = f"Summarize the following text in simple {language_name}:\n\n{text}"
+            prompt = f"Summarize the following text in {language_name} as clearly as possible for a student:\n\n{text}"
             
             # Call the OpenAI API
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}."},
+                    {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}. Focus on key points and main ideas, making the content easily understandable for students."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=500,
+                temperature=0.3,  # Lower temperature for more focused summaries
                 timeout=20  # Add timeout to prevent long-running requests
             )
             
