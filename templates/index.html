@@ -121,8 +121,7 @@
                         </div>
                     {% endif %}
                     
-                    <!-- Include usage stats component -->
-                    {% include 'usage_stats.html' %}
+                    <!-- Usage stats removed from homepage -->
                     
                     <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
                         {% if is_logged_in %}
@@ -131,10 +130,7 @@
                         </a>
                         {% else %}
                         <a href="/login" class="btn btn-primary btn-lg get-started-btn" style="background-color: var(--bs-indigo); border-color: var(--bs-indigo); box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.3s ease;">
-                            <i class="bi bi-google me-2"></i>Login with Google
-                        </a>
-                        <a href="/guest" class="btn btn-lg get-started-btn" style="background-color: var(--bs-indigo); border-color: var(--bs-indigo); color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.3s ease;">
-                            <i class="bi bi-person-fill me-2"></i>Continue as Guest
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
                         </a>
                         {% endif %}
                     </div>

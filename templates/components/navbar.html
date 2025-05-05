@@ -7,7 +7,8 @@
             <span>EduVoice</span>
         </a>
         
-        <!-- Hamburger menu for mobile -->
+        <!-- Hamburger menu for mobile - only shown for logged in users or on non-homepage -->
+        {% if is_logged_in or request.path != '/' %}
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
                 aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
@@ -17,11 +18,13 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <!-- Main navigation buttons -->
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                {% if is_logged_in or request.path != '/' %}
                 <li class="nav-item">
                     <a class="nav-link {{ 'active' if request.path == '/' else '' }}" href="/">
                         <i class="bi bi-house-fill me-1"></i> Home
                     </a>
                 </li>
+                {% endif %}
                 
                 {% if is_logged_in %}
                 <li class="nav-item">
@@ -41,6 +44,10 @@
                 </li>
                 {% endif %}
             </ul>
+        {% else %}
+        <!-- Empty div to push login buttons to the right on homepage -->
+        <div class="ms-auto">
+        {% endif %}
             
             <!-- User section -->
             <div class="d-flex align-items-center">
