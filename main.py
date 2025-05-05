@@ -1882,6 +1882,12 @@ def upload_file():
                             truncated = True
                             logger.info(f"Text truncated for preview: {total_length} characters")
                         
+                        # Create a simple document object for the template
+                        document = {
+                            'text_content': extracted_text,
+                            'questions_processed': False
+                        }
+                        
                         # Render the preview template with the extracted text
                         return render_template(
                             "preview.html",
@@ -1891,7 +1897,9 @@ def upload_file():
                             extracted_text=preview_text,
                             total_length=total_length,
                             truncated=truncated,
-                            usage_stats=user_settings
+                            usage_stats=user_settings,
+                            document=document,
+                            document_id=None  # Set to None since we don't have a document ID yet
                         )
                         
                     except Exception as e:
@@ -1998,6 +2006,13 @@ def summarize_text():
     # Check if user has reached summary generation limit
     if not user_settings.can_generate_summary():
         logger.warning(f"User {user_settings.session_id} has reached summary generation limit")
+        
+        # Create a simple document object for the template
+        document = {
+            'text_content': extracted_text,
+            'questions_processed': False
+        }
+        
         return render_template(
             "preview.html",
             title="Text Preview",
@@ -2007,7 +2022,9 @@ def summarize_text():
             total_length=total_length,
             truncated=truncated,
             error="You've reached your summary generation limit (10 summaries total). Please upgrade your account for more.",
-            usage_stats=user_settings
+            usage_stats=user_settings,
+            document=document,
+            document_id=None
         )
     
     # Get the selected language for summary
@@ -2018,6 +2035,13 @@ def summarize_text():
     
     if error:
         logger.error(f"Error in summarization: {error}")
+        
+        # Create a simple document object for the template
+        document = {
+            'text_content': extracted_text,
+            'questions_processed': False
+        }
+        
         return render_template(
             "preview.html",
             title="Text Preview",
@@ -2027,7 +2051,9 @@ def summarize_text():
             total_length=total_length,
             truncated=truncated,
             error=f"Failed to generate summary: {error}",
-            usage_stats=user_settings
+            usage_stats=user_settings,
+            document=document,
+            document_id=None
         )
     
     # Increment summary counter
