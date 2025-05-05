@@ -7,6 +7,7 @@ import docx
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
 from openai import OpenAI
+# Import OpenAI exceptions - using try/except since error types might vary between versions
 from gtts import gTTS
 from models import db, Document, UserSettings, ChatMessage
 from oauth import init_oauth, auth_bp, login_required
@@ -186,6 +187,73 @@ def extract_text_from_pdf(file_path):
         logger.exception(f"Unexpected error extracting text from PDF: {e}")
         return None, f"Error processing PDF file: {str(e)}"
 
+# Helper function to validate OpenAI API key and handle errors
+def validate_openai_api(api_key=None):
+    """
+    Validate OpenAI API key and handle common errors
+    
+    Args:
+        api_key (str, optional): API key to validate. If None, get from environment.
+        
+    Returns:
+        tuple: (OpenAI client or None, error message or None)
+    """
+    try:
+        # Get API key from environment if not provided
+        if not api_key:
+            api_key = os.environ.get("OPENAI_API_KEY")
+            
+        # Check if API key exists
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+            
+        # Validate API key format (should start with 'sk-')
+        if not isinstance(api_key, str) or not api_key.startswith("sk-"):
+            logger.error("Invalid OpenAI API key format")
+            return None, "Invalid OpenAI API key format. Please check your API key and try again."
+            
+        # Create OpenAI client
+        client = OpenAI(api_key=api_key)
+        return client, None
+        
+    except Exception as e:
+        logger.exception(f"Error validating OpenAI API key: {e}")
+        return None, f"Error initializing OpenAI client: {str(e)}"
+
+# Helper function to handle OpenAI API errors
+def handle_openai_error(error):
+    """
+    Handle OpenAI API errors and return user-friendly error messages
+    
+    Args:
+        error (Exception): The error to handle
+        
+    Returns:
+        str: User-friendly error message
+    """
+    error_str = str(error)
+    error_type = type(error).__name__
+    
+    # Log the detailed error
+    logger.error(f"OpenAI API error ({error_type}): {error_str}")
+    
+    # Check for common error patterns
+    if "authentication" in error_str.lower() or "auth" in error_type.lower():
+        return "Invalid API key. Please verify your OpenAI API key and try again."
+    elif "rate" in error_str.lower() and "limit" in error_str.lower():
+        return "You've reached the OpenAI API rate limit. Please try again later or upgrade your API plan."
+    elif "insufficient_quota" in error_str.lower():
+        return "Your OpenAI API account has insufficient quota. Please check your billing details or upgrade your plan."
+    elif "invalid" in error_str.lower() and "request" in error_str.lower():
+        return "Invalid request to OpenAI API. The document might be too large or contain unsupported content."
+    elif "connection" in error_str.lower() or "network" in error_str.lower():
+        return "Could not connect to OpenAI API. Please check your internet connection and try again."
+    else:
+        # Generic fallback message
+        logger.exception(f"Unexpected OpenAI error: {error}")
+        return f"OpenAI API error: {error_str}"
+
 # Helper function to extract text from DOCX files
 def extract_text_from_docx(file_path):
     """Extract text from DOCX file using python-docx"""
@@ -256,14 +324,12 @@ def generate_chat_response(document_id, user_message):
             logger.error(f"Document not found or has no content: {document_id}")
             return None, "Document not found or has no content to chat about."
         
-        # Set up the OpenAI client with API key from environment variable
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            logger.error("OpenAI API key not found in environment variables")
-            return None, "OpenAI API key not configured. Please contact the administrator."
+        # Get OpenAI client
+        client, error = validate_openai_api()
+        if error:
+            logger.error(f"OpenAI API key validation failed: {error}")
+            return None, error
             
-        client = OpenAI(api_key=openai_api_key)
-        
         # Get user settings for language preference
         settings = get_user_settings()
         language = settings.language
@@ -306,38 +372,64 @@ def generate_chat_response(document_id, user_message):
         # Add the current user message
         messages.append({"role": "user", "content": user_message})
         
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=500
-        )
-        
-        # Extract the response text
-        response_text = response.choices[0].message.content
-        
-        # Save the user message and response to the database
-        user_chat_message = ChatMessage(
-            document_id=document_id,
-            user_id=session.get('user', {}).get('email', 'guest'),
-            message_type='user',
-            content=user_message
-        )
-        
-        assistant_chat_message = ChatMessage(
-            document_id=document_id,
-            user_id=session.get('user', {}).get('email', 'guest'),
-            message_type='assistant',
-            content=response_text
-        )
-        
-        db.session.add(user_chat_message)
-        db.session.add(assistant_chat_message)
-        db.session.commit()
-        
-        logger.info(f"Chat message generated for document {document_id}")
-        return response_text, None
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=500
+            )
+            
+            # Extract the response text
+            response_text = response.choices[0].message.content
+            
+            # Save the user message and response to the database
+            user_chat_message = ChatMessage(
+                document_id=document_id,
+                user_id=session.get('user', {}).get('email', 'guest'),
+                message_type='user',
+                content=user_message
+            )
+            
+            assistant_chat_message = ChatMessage(
+                document_id=document_id,
+                user_id=session.get('user', {}).get('email', 'guest'),
+                message_type='assistant',
+                content=response_text
+            )
+            
+            db.session.add(user_chat_message)
+            db.session.add(assistant_chat_message)
+            db.session.commit()
+            
+            logger.info(f"Chat message generated for document {document_id}")
+            return response_text, None
+            
+        except Exception as api_error:
+            error_message = handle_openai_error(api_error)
+            logger.error(f"OpenAI API error in chat response: {error_message}")
+            
+            # Save the user message and an error response to the database
+            user_chat_message = ChatMessage(
+                document_id=document_id,
+                user_id=session.get('user', {}).get('email', 'guest'),
+                message_type='user',
+                content=user_message
+            )
+            
+            error_response = ChatMessage(
+                document_id=document_id,
+                user_id=session.get('user', {}).get('email', 'guest'),
+                message_type='assistant',
+                content=f"Sorry, I couldn't generate a response at this time: {error_message}"
+            )
+            
+            db.session.add(user_chat_message)
+            db.session.add(error_response)
+            db.session.commit()
+            
+            return None, error_message
         
     except Exception as e:
         logger.exception(f"Error generating chat response: {e}")
@@ -358,14 +450,12 @@ def generate_initial_chat_message(document):
         if not document or not document.text_content:
             return None
             
-        # Set up the OpenAI client with API key from environment variable
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            logger.error("OpenAI API key not found in environment variables")
+        # Get OpenAI client
+        client, error = validate_openai_api()
+        if error:
+            logger.error(f"OpenAI API key validation failed: {error}")
             return None
             
-        client = OpenAI(api_key=openai_api_key)
-        
         # Get user settings for language preference
         settings = get_user_settings()
         language = settings.language
@@ -394,33 +484,54 @@ def generate_initial_chat_message(document):
         Content preview: {document.text_content[:2000] if document.text_content else "No text content available."}
         """
         
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": "Please create a welcome message for this document chat."}
-            ],
-            max_tokens=350
-        )
-        
-        # Extract the response text
-        welcome_message = response.choices[0].message.content
-        
-        # Save the assistant message to the database
-        assistant_chat_message = ChatMessage(
-            document_id=document.id,
-            user_id=document.user_id or 'system',
-            message_type='assistant',
-            content=welcome_message
-        )
-        
-        db.session.add(assistant_chat_message)
-        db.session.commit()
-        
-        logger.info(f"Initial chat message generated for document {document.id}")
-        return welcome_message
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "Please create a welcome message for this document chat."}
+                ],
+                max_tokens=350
+            )
+            
+            # Extract the response text
+            welcome_message = response.choices[0].message.content
+            
+            # Save the assistant message to the database
+            assistant_chat_message = ChatMessage(
+                document_id=document.id,
+                user_id=document.user_id or 'system',
+                message_type='assistant',
+                content=welcome_message
+            )
+            
+            db.session.add(assistant_chat_message)
+            db.session.commit()
+            
+            logger.info(f"Initial chat message generated for document {document.id}")
+            return welcome_message
+            
+        except Exception as api_error:
+            error_message = handle_openai_error(api_error)
+            logger.error(f"OpenAI API error in welcome message: {error_message}")
+            
+            # Create a fallback welcome message
+            fallback_message = f"Welcome to the document chat for '{document.filename}'. I'm currently experiencing some technical difficulties with my AI service. Please try asking a question anyway, and I'll do my best to help when the service is restored."
+            
+            # Save the fallback message to the database
+            assistant_chat_message = ChatMessage(
+                document_id=document.id,
+                user_id=document.user_id or 'system',
+                message_type='assistant',
+                content=fallback_message
+            )
+            
+            db.session.add(assistant_chat_message)
+            db.session.commit()
+            
+            return fallback_message
         
     except Exception as e:
         logger.exception(f"Error generating initial chat message: {e}")
@@ -447,14 +558,12 @@ def generate_summary(text):
             truncated_for_api = True
             logger.info(f"Text truncated for API call (length: {len(text)})")
         
-        # Set up the OpenAI client with API key from environment variable
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            logger.error("OpenAI API key not found in environment variables")
-            return None, "OpenAI API key not configured. Please contact the administrator."
+        # Get OpenAI client
+        client, error = validate_openai_api()
+        if error:
+            logger.error(f"OpenAI API key validation failed: {error}")
+            return None, error
             
-        client = OpenAI(api_key=openai_api_key)
-        
         # Get user settings for language preference
         settings = get_user_settings()
         language = settings.language
@@ -471,31 +580,37 @@ def generate_summary(text):
         # Default to English if language is not in our mapping
         language_name = language_names.get(language, 'English')
         
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        prompt = f"Summarize the following text in simple {language_name}:\n\n{text}"
-        
-        # Call the OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500
-        )
-        
-        # Extract the summary from the response
-        summary = response.choices[0].message.content
-        
-        # Return the summary
-        if truncated_for_api:
-            summary += "\n\n(Note: The original text was truncated due to length constraints before summarization.)"
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            prompt = f"Summarize the following text in simple {language_name}:\n\n{text}"
             
-        return summary, None
+            # Call the OpenAI API
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500
+            )
+            
+            # Extract the summary from the response
+            summary = response.choices[0].message.content
+            
+            # Return the summary
+            if truncated_for_api:
+                summary += "\n\n(Note: The original text was truncated due to length constraints before summarization.)"
+                
+            return summary, None
+            
+        except Exception as api_error:
+            error_message = handle_openai_error(api_error)
+            logger.error(f"OpenAI API error in summary generation: {error_message}")
+            return None, error_message
         
     except Exception as e:
-        logger.error(f"Error generating summary with OpenAI: {e}")
+        logger.exception(f"Error generating summary with OpenAI: {e}")
         return None, f"Error generating summary: {str(e)}"
 
 # Helper function to get or create user settings
