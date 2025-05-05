@@ -1181,13 +1181,18 @@ def upload_file():
             ), 500
 
 # Route for text summarization using OpenAI
-@app.route('/summarize', methods=['POST'])
+@app.route('/summarize', methods=['GET', 'POST'])
 @login_required
 def summarize_text():
     """
     Route to handle text summarization requests (requires login)
     """
     logger.debug("Processing summarization request")
+    
+    # Redirect GET requests to the upload page with a helpful message
+    if request.method == 'GET':
+        flash("To summarize text, please upload a document or paste text from the upload page.", "info")
+        return redirect(url_for('upload_file'))
     
     # Get the current user settings
     user_settings = get_user_settings()
