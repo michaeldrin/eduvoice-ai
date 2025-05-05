@@ -146,7 +146,25 @@
                     
                     {% if error %}
                         <div class="alert alert-danger" role="alert">
-                            {{ error }}
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+                        </div>
+                    {% endif %}
+                    
+                    {% if message %}
+                        <div class="alert alert-success" role="alert">
+                            <i class="bi bi-check-circle-fill me-2"></i>{{ message }}
+                        </div>
+                    {% endif %}
+                    
+                    {% if request.args.get('message') %}
+                        <div class="alert alert-success" role="alert">
+                            <i class="bi bi-check-circle-fill me-2"></i>{{ request.args.get('message') }}
+                        </div>
+                    {% endif %}
+                    
+                    {% if request.args.get('error') %}
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ request.args.get('error') }}
                         </div>
                     {% endif %}
                     

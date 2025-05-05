@@ -364,10 +364,20 @@ def home_page():
     # Get the current user settings
     user_settings = get_user_settings()
     
+    # Get query parameters for messages and errors
+    message = request.args.get('message')
+    error = request.args.get('error')
+    
+    # Log any errors for debugging
+    if error:
+        logger.warning(f"Home page loaded with error: {error}")
+    
     return render_template(
         "index.html", 
         title="EduVoice",
         theme_mode=user_settings.theme_mode,
+        message=message,
+        error=error,
         request=request,
         usage_stats=user_settings
     )

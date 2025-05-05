@@ -31,16 +31,30 @@ def login():
     """Redirect to Google for OAuth login"""
     # Get the Replit domain from environment variables
     replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+    
+    # Get the Google OAuth client ID to check if it's configured
+    client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+    if not client_id:
+        current_app.logger.error("Google OAuth client ID not found in environment variables")
+        return redirect(url_for('home_page', error="Google OAuth is not properly configured. Please set the GOOGLE_OAUTH_CLIENT_ID environment variable."))
+    
     if replit_domain:
-        # Force the HTTPS protocol for the redirect URI
+        # For Replit, use the domain with the /callback path
         redirect_uri = f"https://{replit_domain}/callback"
         current_app.logger.info(f"Using Replit redirect URI: {redirect_uri}")
     else:
         # Fallback to default url_for behavior
-        redirect_uri = url_for('auth.callback', _external=True)
+        redirect_uri = url_for('oauth_callback', _external=True) 
         current_app.logger.info(f"Using standard redirect URI: {redirect_uri}")
     
-    return oauth.google.authorize_redirect(redirect_uri)
+    # Log OAuth configuration for debugging
+    current_app.logger.info(f"OAuth config: client_id={client_id[:5]}..., redirect_uri={redirect_uri}")
+    
+    try:
+        return oauth.google.authorize_redirect(redirect_uri)
+    except Exception as e:
+        current_app.logger.error(f"Error in OAuth redirect: {str(e)}")
+        return redirect(url_for('home_page', error=f"Error starting authentication: {str(e)}"))
 
 
 @auth_bp.route('/callback')
@@ -50,13 +64,28 @@ def callback():
         # Detailed logging for debugging
         current_app.logger.info(f"Callback received: {request.url}")
         
+        # Check for error parameter in the callback URL
+        if 'error' in request.args:
+            error_msg = request.args.get('error')
+            current_app.logger.error(f"OAuth error in callback: {error_msg}")
+            return redirect(url_for('home_page', error=f"Google authentication error: {error_msg}"))
+            
         # Get the token
-        token = oauth.google.authorize_access_token()
-        current_app.logger.info("Token retrieved successfully")
+        try:
+            token = oauth.google.authorize_access_token()
+            current_app.logger.info("Token retrieved successfully")
+        except Exception as token_error:
+            current_app.logger.error(f"Failed to get token: {str(token_error)}")
+            return redirect(url_for('home_page', error=f"Authentication failed: Could not get token. Make sure the redirect URI is correctly set in Google console: {str(token_error)}"))
         
         # Get user info from token
-        resp = oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo')
-        user_info = resp.json()
+        try:
+            resp = oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo')
+            user_info = resp.json()
+            current_app.logger.info(f"User info retrieved: {user_info.get('email', 'No email')}")
+        except Exception as userinfo_error:
+            current_app.logger.error(f"Failed to get user info: {str(userinfo_error)}")
+            return redirect(url_for('home_page', error=f"Authentication failed: Could not get user info: {str(userinfo_error)}"))
         
         if user_info and 'email' in user_info:
             # Store user info in session
@@ -68,12 +97,13 @@ def callback():
                 'logged_in_at': datetime.datetime.now().isoformat()
             }
             
-            current_app.logger.info(f"User logged in: {user_info.get('email')}")
+            current_app.logger.info(f"User logged in successfully: {user_info.get('email')}")
+            # Include success message in the redirect
+            return redirect(url_for('home_page', message=f"Welcome, {user_info.get('name', user_info.get('email'))}!"))
         else:
-            current_app.logger.error(f"Failed to get user info: {user_info}")
-            return redirect(url_for('home_page', error="Failed to get user info"))
-        
-        return redirect(url_for('home_page'))
+            current_app.logger.error(f"Failed to get valid user info: {user_info}")
+            return redirect(url_for('home_page', error="Failed to get user info. Please try again."))
+    
     except Exception as e:
         current_app.logger.error(f"Error in OAuth callback: {str(e)}")
         return redirect(url_for('home_page', error=f"Authentication error: {str(e)}"))
