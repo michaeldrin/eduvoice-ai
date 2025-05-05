@@ -50,6 +50,15 @@ db.init_app(app)
 # Initialize OAuth with the app
 init_oauth(app)
 
+# Print a message to help with Google OAuth setup
+replit_domain = os.environ.get("REPLIT_DEV_DOMAIN")
+if replit_domain:
+    print("\n====================== GOOGLE OAUTH SETUP =======================")
+    print("To make Google authentication work, add this to your authorized")
+    print("redirect URIs in Google Cloud Console:")
+    print(f"https://{replit_domain}/callback")
+    print("================================================================\n")
+
 # Register the auth blueprint
 app.register_blueprint(auth_bp)
 
@@ -59,19 +68,7 @@ def oauth_callback():
     """Route to handle Google OAuth callback at root level"""
     return auth_bp.handle_google_callback()
     
-# Register context processor to make user info available in all templates
-@app.context_processor
-def inject_global_variables():
-    """
-    Make common variables available to all templates
-    """
-    user_logged_in = 'user' in session
-    google_user = session.get('user', {}) if user_logged_in else {}
-    
-    return {
-        'is_logged_in': user_logged_in,
-        'google_user': google_user
-    }
+# This function has been moved to combine with the existing inject_global_variables
 
 # Create all database tables
 with app.app_context():
