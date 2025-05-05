@@ -16,6 +16,10 @@
 <body class="{{ accessibility_classes }}">
     <!-- Reading ruler for accessibility (only shown if enabled) -->
     <div class="reading-ruler"></div>
+    
+    <!-- Include the new navbar component -->
+    {% include 'components/navbar.html' %}
+    
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-md-8">
@@ -60,21 +64,7 @@
                             </div>
                         </form>
                         
-                        <hr class="my-4">
-                        
-                        <div class="d-flex justify-content-between mt-3">
-                            <a href="/" class="btn btn-secondary">
-                                <i class="bi bi-house"></i> Back to Home
-                            </a>
-                            <div>
-                                <a href="/settings" class="btn btn-success">
-                                    <i class="bi bi-gear"></i> Settings
-                                </a>
-                                <a href="/dashboard" class="btn btn-info">
-                                    <i class="bi bi-table"></i> Dashboard
-                                </a>
-                            </div>
-                        </div>
+
                     </div>
                 </div>
             </div>
