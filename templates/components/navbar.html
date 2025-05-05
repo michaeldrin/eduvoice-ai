@@ -5,6 +5,9 @@
         <a class="navbar-brand d-flex align-items-center" href="/">
             <img src="{{ url_for('static', filename='eduvoice-logo.svg') }}" alt="EduVoice Logo" height="30" class="me-2">
             <span>EduVoice</span>
+            {% if testing_mode %}
+            <span class="badge bg-warning text-dark ms-2">DEV MODE</span>
+            {% endif %}
         </a>
         
         <!-- Hamburger menu for mobile - only shown for logged in users or on non-homepage -->

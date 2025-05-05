@@ -86,9 +86,31 @@ class UserSettings(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Usage limits as class constants
-    MAX_FILES_PER_DAY = 5
-    MAX_SUMMARIES = 10
-    MAX_AUDIO_MINUTES = 15.0
+    # Higher limits for development/testing mode (can be adjusted in config)
+    TESTING_MODE = True  # Set to False in production
+    
+    # Default limits
+    DEFAULT_MAX_FILES_PER_DAY = 5
+    DEFAULT_MAX_SUMMARIES = 10
+    DEFAULT_MAX_AUDIO_MINUTES = 15.0
+    
+    # Testing limits (much higher for development)
+    TESTING_MAX_FILES_PER_DAY = 500
+    TESTING_MAX_SUMMARIES = 100
+    TESTING_MAX_AUDIO_MINUTES = 500.0
+    
+    # Active limits (will use testing or default based on TESTING_MODE)
+    @property
+    def MAX_FILES_PER_DAY(self):
+        return self.TESTING_MAX_FILES_PER_DAY if self.TESTING_MODE else self.DEFAULT_MAX_FILES_PER_DAY
+        
+    @property
+    def MAX_SUMMARIES(self):
+        return self.TESTING_MAX_SUMMARIES if self.TESTING_MODE else self.DEFAULT_MAX_SUMMARIES
+        
+    @property
+    def MAX_AUDIO_MINUTES(self):
+        return self.TESTING_MAX_AUDIO_MINUTES if self.TESTING_MODE else self.DEFAULT_MAX_AUDIO_MINUTES
     
     def __repr__(self):
         return f'<UserSettings {self.session_id}>'
