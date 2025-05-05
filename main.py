@@ -2427,6 +2427,63 @@ def process_document_questions_route(document_id):
     flash('Document questions have been processed successfully.', 'success')
     return redirect(url_for('document_questions', document_id=document_id))
 
+# Document preview page
+@app.route('/document/<int:document_id>/preview')
+@login_required
+def document_preview(document_id):
+    """
+    Display a preview of a document with action buttons
+    """
+    logger.debug(f"Accessing document preview for document ID: {document_id}")
+    
+    try:
+        # Get the document
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check: make sure the current user owns this document
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            logger.warning(f"Unauthorized access attempt to document {document_id} by {current_user_id}")
+            flash("You don't have permission to access this document.", "error")
+            return redirect(url_for('dashboard'))
+        
+        # Get user settings
+        user_settings = get_user_settings()
+        
+        # Prepare preview text
+        preview_text = document.text_content
+        total_length = len(preview_text) if preview_text else 0
+        truncated = False
+        
+        if preview_text and total_length > app.config['PREVIEW_TEXT_MAX_LENGTH']:
+            preview_text = preview_text[:app.config['PREVIEW_TEXT_MAX_LENGTH']] + "... (truncated for preview)"
+            truncated = True
+            logger.info(f"Text truncated for preview: {total_length} characters")
+        
+        # Render the preview template with the document
+        return render_template(
+            "preview.html",
+            title=f"Preview: {document.filename}",
+            document=document,
+            filename=document.filename,
+            filetype=document.filetype.upper(),
+            extracted_text=preview_text,
+            total_length=total_length,
+            truncated=truncated,
+            usage_stats=user_settings,
+            document_id=document_id
+        )
+        
+    except Exception as e:
+        logger.error(f"Error accessing document preview: {e}")
+        flash(f"Error accessing document: {str(e)}", "error")
+        return redirect(url_for('dashboard'))
+
 # Document questions view
 @app.route('/document/<int:document_id>/questions')
 @login_required
