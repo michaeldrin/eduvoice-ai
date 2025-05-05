@@ -859,8 +859,20 @@ def dashboard():
         user_settings = get_user_settings()
         
         try:
-            # Query all documents from the database, ordered by upload time (newest first)
-            documents = Document.query.order_by(Document.upload_time.desc()).all()
+            # Get the current user's ID (email)
+            current_user_id = None
+            if 'user' in session:
+                current_user_id = session['user'].get('email')
+                
+            # Query only documents belonging to the current user, ordered by upload time (newest first)
+            if current_user_id:
+                documents = Document.query.filter_by(user_id=current_user_id).order_by(Document.upload_time.desc()).all()
+                logger.info(f"Found {len(documents)} documents for user {current_user_id}")
+            else:
+                # Fallback to session-based ID for guests
+                session_id = session.get('session_id', '')
+                documents = Document.query.filter_by(user_id=session_id).order_by(Document.upload_time.desc()).all()
+                logger.info(f"Found {len(documents)} documents for guest session {session_id}")
             
             # Render the dashboard template with the documents
             return render_template(

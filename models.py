@@ -6,6 +6,7 @@ db = SQLAlchemy()
 class Document(db.Model):
     """Model for uploaded documents and their summaries"""
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(255), nullable=True)  # User's email or guest ID
     filename = db.Column(db.String(255), nullable=False)
     filetype = db.Column(db.String(50), nullable=False)
     summary = db.Column(db.Text, nullable=True)
@@ -20,6 +21,7 @@ class Document(db.Model):
         """Convert document to dictionary for JSON serialization"""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'filename': self.filename,
             'filetype': self.filetype,
             'summary': self.summary,
