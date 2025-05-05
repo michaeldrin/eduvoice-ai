@@ -982,6 +982,9 @@ def summarize_text():
         db.session.commit()
         logger.info(f"Document record saved to database: {filename}")
         
+        # Store document ID in session for the chat feature in summary page
+        session['last_document_id'] = document.id
+        
         # Generate initial chat message for document chat
         try:
             welcome_message = generate_initial_chat_message(document)

@@ -134,6 +134,37 @@
                         
                         <hr class="my-4">
                         
+                        <!-- Chat with document card -->
+                        {% if extracted_text %}
+                        <div class="card mb-4">
+                            <div class="card-header bg-secondary text-white">
+                                <i class="bi bi-chat-dots"></i> Have Questions About This Document?
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <h5 class="card-title">Chat with Your Document</h5>
+                                        <p class="card-text">
+                                            Use our AI-powered chat feature to ask specific questions about this document's content.
+                                            You can inquire about details, request clarifications, or explore topics mentioned in the text.
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4 text-center">
+                                        <img src="{{ url_for('static', filename='img/chat-illustration.svg') }}" 
+                                             alt="Chat Illustration" 
+                                             class="img-fluid mb-3" 
+                                             style="max-height: 150px; opacity: 0.8;"
+                                             onerror="this.style.display='none'">
+                                        <a href="{{ url_for('document_chat', document_id=session.get('last_document_id', 0)) }}" 
+                                           class="btn btn-primary w-100">
+                                            <i class="bi bi-chat-text"></i> Start Chatting
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
                         <div class="d-flex justify-content-between mt-3">
                             <div>
                                 <a href="/upload" class="btn btn-primary">

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200px" height="150px" viewBox="0 0 200 150" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g id="chat-illustration" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+    <g id="chat-bubbles" transform="translate(10, 10)">
+      <!-- Left chat bubble -->
+      <g id="left-bubble">
+        <path d="M10,25 L10,80 C10,86.0751325 14.9248675,91 21,91 L70,91 C76.0751325,91 81,86.0751325 81,80 L81,25 C81,18.9248675 76.0751325,14 70,14 L21,14 C14.9248675,14 10,18.9248675 10,25 Z" id="bubble-bg-left" fill="#435363" opacity="0.9"></path>
+        <path d="M10,25 L4,35 L10,33 L10,25 Z" id="chat-tail-left" fill="#435363" opacity="0.9"></path>
+        
+        <!-- Text lines inside left bubble -->
+        <rect id="line1-left" fill="#FFFFFF" opacity="0.7" x="20" y="30" width="50" height="3" rx="1.5"></rect>
+        <rect id="line2-left" fill="#FFFFFF" opacity="0.7" x="20" y="40" width="40" height="3" rx="1.5"></rect>
+        <rect id="line3-left" fill="#FFFFFF" opacity="0.7" x="20" y="50" width="45" height="3" rx="1.5"></rect>
+        <rect id="line4-left" fill="#FFFFFF" opacity="0.7" x="20" y="60" width="35" height="3" rx="1.5"></rect>
+      </g>
+      
+      <!-- Right chat bubble -->
+      <g id="right-bubble" transform="translate(80, 40)">
+        <path d="M10,25 L10,60 C10,66.0751325 14.9248675,71 21,71 L70,71 C76.0751325,71 81,66.0751325 81,60 L81,25 C81,18.9248675 76.0751325,14 70,14 L21,14 C14.9248675,14 10,18.9248675 10,25 Z" id="bubble-bg-right" fill="#0074D9" opacity="0.9"></path>
+        <path d="M81,25 L87,35 L81,33 L81,25 Z" id="chat-tail-right" fill="#0074D9" opacity="0.9"></path>
+        
+        <!-- Text lines inside right bubble -->
+        <rect id="line1-right" fill="#FFFFFF" opacity="0.7" x="20" y="30" width="45" height="3" rx="1.5"></rect>
+        <rect id="line2-right" fill="#FFFFFF" opacity="0.7" x="20" y="40" width="50" height="3" rx="1.5"></rect>
+        <rect id="line3-right" fill="#FFFFFF" opacity="0.7" x="20" y="50" width="40" height="3" rx="1.5"></rect>
+      </g>
+      
+      <!-- Robot icon -->
+      <g id="robot-icon" transform="translate(20, 110)">
+        <circle id="robot-face" fill="#0074D9" cx="15" cy="15" r="15"></circle>
+        <rect id="robot-eye1" fill="#FFFFFF" opacity="0.9" x="8" y="10" width="6" height="6" rx="1"></rect>
+        <rect id="robot-eye2" fill="#FFFFFF" opacity="0.9" x="18" y="10" width="6" height="6" rx="1"></rect>
+        <rect id="robot-mouth" fill="#FFFFFF" opacity="0.9" x="10" y="22" width="12" height="3" rx="1.5"></rect>
+      </g>
+      
+      <!-- Person icon -->
+      <g id="person-icon" transform="translate(130, 110)">
+        <circle id="person-face" fill="#435363" cx="15" cy="15" r="15"></circle>
+        <circle id="person-eye1" fill="#FFFFFF" opacity="0.9" cx="10" cy="12" r="2"></circle>
+        <circle id="person-eye2" fill="#FFFFFF" opacity="0.9" cx="20" cy="12" r="2"></circle>
+        <path d="M10,22 C10,22 15,25 20,22" id="person-smile" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"></path>
+      </g>
+    </g>
+  </g>
+</svg>

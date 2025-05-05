@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row mb-3">
+    <div class="col-12">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Chat with {{ document.filename }}</li>
+        </ol>
+      </nav>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-4 mb-4">
+      <div class="card bg-dark text-light">
+        <div class="card-header">
+          <h5 class="card-title mb-0">Document Information</h5>
+        </div>
+        <div class="card-body">
+          <p><strong>Filename:</strong> {{ document.filename }}</p>
+          <p><strong>Type:</strong> {{ document.filetype }}</p>
+          <p><strong>Uploaded:</strong> {{ document.upload_time }}</p>
+          
+          {% if document.summary %}
+          <div class="mt-3">
+            <h6>Summary</h6>
+            <div class="summary-content">
+              {{ document.summary|safe|truncate(200) }}
+            </div>
+            <div class="mt-2">
+              {% if document.text_filename %}
+              <a href="{{ url_for('download_summary_text', filename=document.text_filename) }}" class="btn btn-sm btn-outline-info">
+                <i class="bi bi-file-text"></i> Download Summary
+              </a>
+              {% endif %}
+              
+              {% if document.audio_filename %}
+              <a href="{{ url_for('download_audio', filename=document.audio_filename) }}" class="btn btn-sm btn-outline-info ms-2">
+                <i class="bi bi-file-music"></i> Download Audio
+              </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card bg-dark text-light chat-container">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Chat with Document</h5>
+          <button class="btn btn-sm btn-outline-info" id="clearChat">
+            <i class="bi bi-trash"></i> Clear Chat
+          </button>
+        </div>
+        <div class="card-body chat-messages-container" id="chatMessages">
+          {% if chat_messages %}
+            {% for message in chat_messages %}
+              <div class="chat-message {% if message.message_type == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                <div class="message-content">
+                  <p>{{ message.content|safe }}</p>
+                </div>
+                <div class="message-meta text-muted">
+                  {{ message.created_at.strftime('%H:%M') if message.created_at else '' }}
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-center text-muted py-5">
+              <p>No messages yet. Start chatting with the document below.</p>
+            </div>
+          {% endif %}
+        </div>
+        <div class="card-footer">
+          <form id="chatForm" class="d-flex">
+            <input type="hidden" id="documentId" value="{{ document.id }}">
+            <input type="text" id="userMessage" class="form-control" placeholder="Ask something about this document..." required>
+            <button type="submit" class="btn btn-primary ms-2" id="sendButton">
+              <i class="bi bi-send"></i> Send
+            </button>
+          </form>
+          <div class="feedback mt-2 d-none" id="chatFeedback">
+            <div class="alert alert-danger" role="alert" id="chatError"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+  }
+  
+  .chat-messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .chat-message {
+    max-width: 85%;
+    padding: 10px 15px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  
+  .user-message {
+    background-color: var(--bs-primary);
+    align-self: flex-end;
+    border-bottom-right-radius: 0;
+  }
+  
+  .assistant-message {
+    background-color: var(--bs-dark-bg-subtle);
+    align-self: flex-start;
+    border-bottom-left-radius: 0;
+  }
+  
+  .message-meta {
+    font-size: 0.75rem;
+    text-align: right;
+    margin-top: 5px;
+  }
+  
+  .summary-content {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background-color: var(--bs-dark-bg-subtle);
+    border-radius: 5px;
+    margin-bottom: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chatForm');
+    const userMessageInput = document.getElementById('userMessage');
+    const chatMessages = document.getElementById('chatMessages');
+    const documentId = document.getElementById('documentId').value;
+    const sendButton = document.getElementById('sendButton');
+    const chatFeedback = document.getElementById('chatFeedback');
+    const chatError = document.getElementById('chatError');
+    const clearChatButton = document.getElementById('clearChat');
+    
+    // Scroll to bottom of chat container
+    function scrollToBottom() {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // Initialize
+    scrollToBottom();
+    
+    // Add a message to the chat UI
+    function addMessageToUI(content, isUser = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chat-message ${isUser ? 'user-message' : 'assistant-message'}`;
+      
+      const messageContent = document.createElement('div');
+      messageContent.className = 'message-content';
+      messageContent.innerHTML = `<p>${content}</p>`;
+      
+      const messageMeta = document.createElement('div');
+      messageMeta.className = 'message-meta text-muted';
+      const now = new Date();
+      messageMeta.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      
+      messageDiv.appendChild(messageContent);
+      messageDiv.appendChild(messageMeta);
+      
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+    
+    // Show loading indicator
+    function showLoading() {
+      sendButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+      sendButton.disabled = true;
+      userMessageInput.disabled = true;
+    }
+    
+    // Hide loading indicator
+    function hideLoading() {
+      sendButton.innerHTML = '<i class="bi bi-send"></i> Send';
+      sendButton.disabled = false;
+      userMessageInput.disabled = false;
+      userMessageInput.focus();
+    }
+    
+    // Show error message
+    function showError(message) {
+      chatFeedback.classList.remove('d-none');
+      chatError.textContent = message;
+      setTimeout(() => {
+        chatFeedback.classList.add('d-none');
+      }, 5000);
+    }
+    
+    // Handle chat form submission
+    chatForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const userMessage = userMessageInput.value.trim();
+      if (!userMessage) return;
+      
+      // Add user message to UI
+      addMessageToUI(userMessage, true);
+      
+      // Clear input
+      userMessageInput.value = '';
+      
+      // Show loading indicator
+      showLoading();
+      
+      // Send message to API
+      fetch(`/api/document/${documentId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: userMessage }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          showError(data.error);
+        } else {
+          // Add assistant response to UI
+          addMessageToUI(data.response);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to send message. Please try again.');
+      })
+      .finally(() => {
+        hideLoading();
+      });
+    });
+    
+    // Clear chat (just UI, not database)
+    clearChatButton.addEventListener('click', function() {
+      if (confirm('This will clear the chat messages from your view. The chat history will still be stored in the database. Continue?')) {
+        while (chatMessages.firstChild) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        
+        // Add empty message
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'text-center text-muted py-5';
+        emptyMessage.innerHTML = '<p>No messages. Start chatting with the document below.</p>';
+        chatMessages.appendChild(emptyMessage);
+      }
+    });
+  });
+</script>
+{% endblock %}
