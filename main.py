@@ -1776,6 +1776,10 @@ def document_chat_api(document_id):
                 
             user_message = data['message']
             
+            # Get the language parameter (default to document's language or 'en')
+            language = data.get('language', document.language or 'en')
+            logger.debug(f"Chat language: {language}")
+            
             # Check message content
             if not user_message or not isinstance(user_message, str) or len(user_message.strip()) == 0:
                 logger.warning(f"Empty or invalid message content: {user_message}")
@@ -1786,7 +1790,7 @@ def document_chat_api(document_id):
         
         # Generate a response with enhanced error handling
         try:
-            response, error = generate_chat_response(document_id, user_message)
+            response, error = generate_chat_response(document_id, user_message, language)
             
             if error:
                 # Check for known error patterns to provide better errors

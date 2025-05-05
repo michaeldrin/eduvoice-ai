@@ -60,11 +60,38 @@
                             </div>
                             
                             <div class="card mb-4">
-                                <div class="card-header bg-primary text-white">
-                                    <i class="bi bi-robot"></i> AI-Generated Summary
+                                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-robot"></i> AI-Generated Summary
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-info dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="bi bi-translate"></i> Language
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                                            <li><button class="dropdown-item translate-btn" data-language="en">English</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="es">Spanish (Español)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="fr">French (Français)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="de">German (Deutsch)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="it">Italian (Italiano)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="pt">Portuguese (Português)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="ru">Russian (Русский)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="zh">Chinese (中文)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="ja">Japanese (日本語)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="ko">Korean (한국어)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="ar">Arabic (العربية)</button></li>
+                                            <li><button class="dropdown-item translate-btn" data-language="hi">Hindi (हिन्दी)</button></li>
+                                        </ul>
+                                    </div>
                                 </div>
                                 <div class="card-body">
-                                    <div class="summary-content mb-4">{{ summary|safe }}</div>
+                                    <div id="translation-status" class="alert alert-info d-none mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            <span>Translating summary...</span>
+                                        </div>
+                                    </div>
+                                    <div class="summary-content mb-4" id="summary-content">{{ summary|safe }}</div>
                                     
                                     {% if text_filename %}
                                     <div class="download-button-container mb-4 text-end">
@@ -200,5 +227,90 @@
     {% if audio_file %}
     <script src="{{ url_for('static', filename='js/audio-visualizer.js') }}"></script>
     {% endif %}
+    
+    <!-- Translation functionality -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get all language selection buttons
+        const translateButtons = document.querySelectorAll('.translate-btn');
+        const summaryContent = document.getElementById('summary-content');
+        const translationStatus = document.getElementById('translation-status');
+        const documentId = {{ session.get('last_document_id', 0) }};
+        
+        // Current language (default to document's original language)
+        let currentLanguage = "{{ document.language if document and document.language else 'en' }}";
+        
+        // Original summary content
+        const originalSummary = summaryContent.innerHTML;
+        
+        // Add click event to each language button
+        translateButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const targetLanguage = this.getAttribute('data-language');
+                
+                // If same language is selected, do nothing
+                if (targetLanguage === currentLanguage) {
+                    return;
+                }
+                
+                // Show translation status
+                translationStatus.classList.remove('d-none');
+                
+                // Make API request to translate the summary
+                fetch(`/document/${documentId}/translate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        target_language: targetLanguage
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Translation request failed');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Update the summary with translated content
+                    if (data.translated_summary) {
+                        summaryContent.innerHTML = data.translated_summary;
+                        currentLanguage = targetLanguage;
+                    } else if (data.error) {
+                        // Show error message
+                        translationStatus.classList.remove('alert-info');
+                        translationStatus.classList.add('alert-danger');
+                        translationStatus.innerHTML = `<div><i class="bi bi-exclamation-triangle"></i> ${data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Translation error:', error);
+                    // Show error message
+                    translationStatus.classList.remove('alert-info');
+                    translationStatus.classList.add('alert-danger');
+                    translationStatus.innerHTML = '<div><i class="bi bi-exclamation-triangle"></i> Translation failed. Please try again later.</div>';
+                })
+                .finally(() => {
+                    // After 3 seconds, hide the translation status if it's not an error
+                    if (!translationStatus.classList.contains('alert-danger')) {
+                        setTimeout(() => {
+                            translationStatus.classList.add('d-none');
+                            // Reset the status back to info for next time
+                            translationStatus.classList.remove('alert-danger');
+                            translationStatus.classList.add('alert-info');
+                            translationStatus.innerHTML = `
+                                <div class="d-flex align-items-center">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Translating summary...</span>
+                                </div>
+                            `;
+                        }, 3000);
+                    }
+                });
+            });
+        });
+    });
+    </script>
 </body>
 </html>

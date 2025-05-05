@@ -55,9 +55,30 @@
       <div class="card bg-dark text-light chat-container">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">Chat with Document</h5>
-          <button class="btn btn-sm btn-outline-info" id="clearChat">
-            <i class="bi bi-trash"></i> Clear Chat
-          </button>
+          <div class="d-flex gap-2">
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-translate"></i> Language
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+                <li><button class="dropdown-item language-btn" data-language="en">English</button></li>
+                <li><button class="dropdown-item language-btn" data-language="es">Spanish (Español)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="fr">French (Français)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="de">German (Deutsch)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="it">Italian (Italiano)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="pt">Portuguese (Português)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="ru">Russian (Русский)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="zh">Chinese (中文)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="ja">Japanese (日本語)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="ko">Korean (한국어)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="ar">Arabic (العربية)</button></li>
+                <li><button class="dropdown-item language-btn" data-language="hi">Hindi (हिन्दी)</button></li>
+              </ul>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" id="clearChat">
+              <i class="bi bi-trash"></i> Clear Chat
+            </button>
+          </div>
         </div>
         <div class="card-body chat-messages-container" id="chatMessages">
           {% if chat_messages %}
@@ -159,6 +180,10 @@
     const chatFeedback = document.getElementById('chatFeedback');
     const chatError = document.getElementById('chatError');
     const clearChatButton = document.getElementById('clearChat');
+    const languageButtons = document.querySelectorAll('.language-btn');
+    
+    // Current language for chat (default to English)
+    let currentChatLanguage = "{{ document.language if document and document.language else 'en' }}";
     
     // Scroll to bottom of chat container
     function scrollToBottom() {
@@ -235,7 +260,10 @@
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ 
+          message: userMessage,
+          language: currentChatLanguage 
+        }),
       })
       .then(response => response.json())
       .then(data => {
@@ -268,6 +296,39 @@
         emptyMessage.innerHTML = '<p>No messages. Start chatting with the document below.</p>';
         chatMessages.appendChild(emptyMessage);
       }
+    });
+    
+    // Handle language selection for chat
+    languageButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const selectedLanguage = this.getAttribute('data-language');
+        
+        // Update the current language
+        currentChatLanguage = selectedLanguage;
+        
+        // Update the dropdown button text to reflect the selected language
+        const languageMap = {
+          'en': 'English',
+          'es': 'Spanish',
+          'fr': 'French',
+          'de': 'German',
+          'it': 'Italian',
+          'pt': 'Portuguese',
+          'ru': 'Russian',
+          'zh': 'Chinese',
+          'ja': 'Japanese',
+          'ko': 'Korean',
+          'ar': 'Arabic',
+          'hi': 'Hindi'
+        };
+        
+        // Update the dropdown button text
+        const dropdownButton = document.getElementById('languageDropdown');
+        dropdownButton.innerHTML = `<i class="bi bi-translate"></i> ${languageMap[selectedLanguage] || 'Language'}`;
+        
+        // Show a notification about the language change
+        showError(`Chat language changed to ${languageMap[selectedLanguage]}. New messages will be in this language.`);
+      });
     });
   });
 </script>
