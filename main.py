@@ -534,6 +534,75 @@ def get_user_settings():
     
     return settings
 
+# Helper function for automatically processing a document
+def auto_process_document(document):
+    """
+    Automatically process a document by generating a summary, TTS audio, and initial chat message
+    
+    Args:
+        document (Document): The document to process
+        
+    Returns:
+        bool: True if processing was successful, False otherwise
+    """
+    try:
+        if not document or not document.text_content:
+            logger.error(f"Cannot auto-process document: no document or text content")
+            return False
+            
+        logger.info(f"Starting auto-processing for document {document.id}: {document.filename}")
+        
+        # Generate summary if not already done
+        if not document.summary:
+            logger.info(f"Generating summary for document {document.id}")
+            summary, error = generate_summary(document.text_content)
+            if error or not summary:
+                logger.error(f"Failed to generate summary: {error}")
+                return False
+                
+            document.summary = summary
+            
+            # Save summary to a text file
+            summaries_dir = os.path.join('static', 'summaries')
+            os.makedirs(summaries_dir, exist_ok=True)
+            
+            summary_filename = f"summary_{uuid.uuid4().hex}.txt"
+            summary_path = os.path.join(summaries_dir, summary_filename)
+            
+            with open(summary_path, 'w', encoding='utf-8') as summary_file:
+                summary_file.write(summary)
+                
+            document.text_filename = summary_filename
+            logger.info(f"Summary file created: {summary_filename}")
+            
+        # Generate audio if not already done
+        if not document.audio_filename:
+            logger.info(f"Generating audio for document {document.id}")
+            audio_filename, error = text_to_speech(document.summary)
+            if error or not audio_filename:
+                logger.error(f"Failed to generate audio: {error}")
+                # Continue processing even if audio fails
+            else:
+                document.audio_filename = audio_filename
+                logger.info(f"Audio file created: {audio_filename}")
+        
+        # Generate initial chat message
+        logger.info(f"Generating initial chat message for document {document.id}")
+        welcome_message = generate_initial_chat_message(document)
+        if not welcome_message:
+            logger.warning(f"Failed to generate welcome message for document {document.id}")
+            # Continue processing even if welcome message fails
+            
+        # Mark document as auto-processed
+        document.auto_processed = True
+        db.session.commit()
+        logger.info(f"Auto-processing complete for document {document.id}")
+        return True
+        
+    except Exception as e:
+        logger.exception(f"Error during auto-processing of document: {e}")
+        return False
+
 # Helper function to convert text to speech using gTTS
 def text_to_speech(text, filename=None):
     """
@@ -903,13 +972,25 @@ def summarize_text():
             filename=filename,
             filetype=filetype,
             summary=summary,
+            text_content=extracted_text,  # Store the full text content for chat
             text_filename=text_filename,
             audio_filename=audio_file,
-            upload_time=datetime.datetime.now()
+            upload_time=datetime.datetime.now(),
+            auto_processed=True  # Mark as processed since we're doing it here
         )
         db.session.add(document)
         db.session.commit()
         logger.info(f"Document record saved to database: {filename}")
+        
+        # Generate initial chat message for document chat
+        try:
+            welcome_message = generate_initial_chat_message(document)
+            if welcome_message:
+                logger.info(f"Generated initial chat message for document {document.id}")
+            else:
+                logger.warning(f"Failed to generate initial chat message for document {document.id}")
+        except Exception as chat_error:
+            logger.error(f"Error generating initial chat message: {chat_error}")
     except Exception as e:
         logger.error(f"Error saving document to database: {e}")
         # Continue anyway - don't let database issues prevent summary display
@@ -1037,6 +1118,112 @@ def download_audio(filename):
         as_attachment=True,
         download_name=filename
     )
+
+# Document chat page
+@app.route('/document/<int:document_id>/chat')
+@login_required
+def document_chat(document_id):
+    """
+    Chat with a specific document using AI
+    """
+    logger.debug(f"Accessing document chat for document ID: {document_id}")
+    
+    try:
+        # Get the document
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check: make sure the current user owns this document
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            logger.warning(f"Unauthorized access attempt to document {document_id} by {current_user_id}")
+            flash("You don't have permission to access this document.", "error")
+            return redirect(url_for('dashboard'))
+            
+        # Get the chat messages for this document
+        chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        
+        # If no chat messages exist yet, auto-generate a welcome message
+        if not chat_messages and document.text_content:
+            try:
+                logger.info(f"Generating initial welcome message for document {document_id}")
+                welcome_message = generate_initial_chat_message(document)
+                if welcome_message:
+                    # Reload the chat messages to include the new welcome message
+                    chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+            except Exception as e:
+                logger.error(f"Error generating welcome message: {e}")
+        
+        # Get user settings
+        user_settings = get_user_settings()
+        
+        # Render the chat template
+        return render_template(
+            "document_chat.html",
+            title=f"Chat with {document.filename}",
+            document=document,
+            chat_messages=chat_messages,
+            usage_stats=user_settings
+        )
+        
+    except Exception as e:
+        logger.error(f"Error accessing document chat: {e}")
+        flash(f"Error accessing document chat: {str(e)}", "error")
+        return redirect(url_for('dashboard'))
+
+# API endpoint for document chat
+@app.route('/api/document/<int:document_id>/chat', methods=['POST'])
+@login_required
+def document_chat_api(document_id):
+    """
+    API endpoint for document chat interactions
+    """
+    try:
+        # Get the document
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check: make sure the current user owns this document
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            logger.warning(f"Unauthorized API access attempt to document {document_id} by {current_user_id}")
+            return jsonify({'error': "You don't have permission to access this document."}), 403
+        
+        # Get the user message from the request
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'error': 'No message provided'}), 400
+            
+        user_message = data['message']
+        
+        # Generate a response
+        response, error = generate_chat_response(document_id, user_message)
+        
+        if error:
+            logger.error(f"Error generating chat response: {error}")
+            return jsonify({'error': error}), 500
+            
+        # Get all chat messages for this document
+        chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        messages_json = [message.to_dict() for message in chat_messages]
+        
+        return jsonify({
+            'success': True,
+            'response': response,
+            'messages': messages_json
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error in document chat API: {e}")
+        return jsonify({'error': f"An error occurred: {str(e)}"}), 500
 
 # Dashboard route to view upload history
 @app.route('/dashboard')
