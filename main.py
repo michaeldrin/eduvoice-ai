@@ -824,41 +824,82 @@ def text_to_speech(text, filename=None):
         
         # Generate a unique filename if one is not provided
         if not filename:
-            filename = f"speech_{uuid.uuid4().hex}.mp3"
-        elif not filename.endswith('.mp3'):
-            filename = f"{filename}.mp3"
+            base_filename = f"speech_{uuid.uuid4().hex[:8]}"
+        else:
+            # Strip any path and extension
+            base_filename = os.path.splitext(os.path.basename(filename))[0]
+            
+        # Add document name if available (from a filename like 'document_123.pdf')
+        if '_' in base_filename and not base_filename.startswith('speech_'):
+            # Extract the document name for better identification
+            doc_name = base_filename.split('.')[0]
+            filename = f"{doc_name}_{uuid.uuid4().hex[:8]}.mp3"
+        else:
+            filename = f"{base_filename}.mp3"
             
         # Full path to the audio file
         audio_path = os.path.join(audio_dir, filename)
         
         # Limit text length for TTS if needed (gTTS has limits)
         max_tts_length = 5000  # Characters
+        truncated = False
         if len(text) > max_tts_length:
             text = text[:max_tts_length] + "... Text has been truncated for audio conversion."
+            truncated = True
             logger.info(f"Text truncated for TTS (length: {len(text)})")
         
         # Get user settings for language and voice speed
         settings = get_user_settings()
         
         # Default to English if language not supported by gTTS
-        language = settings.language if settings.language in ['en', 'de', 'fr', 'es', 'it'] else 'en'
+        supported_languages = ['en', 'de', 'fr', 'es', 'it', 'ru', 'zh-CN', 'ja']
+        language = settings.language if settings.language in supported_languages else 'en'
         
         # Set the speaking rate
         slow_speech = settings.voice_speed == 'slow'
         
-        # Create gTTS object with user settings
-        tts = gTTS(text=text, lang=language, slow=slow_speech)
+        try:
+            # Create gTTS object with user settings
+            tts = gTTS(text=text, lang=language, slow=slow_speech)
+            
+            # Save the audio file
+            tts.save(audio_path)
+            
+            # Check if the file was created successfully and has content
+            if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+                raise Exception("Failed to create audio file or file is empty")
+                
+            logger.info(f"Audio file created: {filename} in language: {language}" + 
+                        (" (truncated)" if truncated else ""))
+            
+            # Return the filename (without the full path)
+            return filename, None
+            
+        except requests.exceptions.RequestException as network_error:
+            # Network-related errors (like connectivity issues)
+            logger.error(f"Network error during TTS API call: {network_error}")
+            return None, "Could not connect to the text-to-speech service. Please check your internet connection."
+            
+        except ValueError as value_error:
+            # Invalid values (like unsupported language)
+            logger.error(f"Value error in TTS: {value_error}")
+            return None, f"Invalid parameter for text-to-speech: {str(value_error)}"
         
-        # Save the audio file
-        tts.save(audio_path)
-        logger.info(f"Audio file created: {filename} in language: {language}")
-        
-        # Return the filename (without the full path)
-        return filename, None
+    except IOError as io_error:
+        # File-related errors
+        logger.error(f"File I/O error during TTS processing: {io_error}")
+        return None, "Could not create the audio file due to a file system error."
         
     except Exception as e:
-        logger.error(f"Error in text-to-speech conversion: {e}")
-        return None, f"Error converting text to speech: {str(e)}"
+        # General catch-all with detailed logging
+        logger.exception(f"Unexpected error in text-to-speech conversion: {e}")
+        
+        if app.debug:
+            # In debug mode, return detailed error info
+            return None, f"Error converting text to speech: {str(e)}"
+        else:
+            # In production, return a user-friendly message
+            return None, "An error occurred while creating the audio file. Please try again later."
 
 # Define routes
 @app.route("/")
