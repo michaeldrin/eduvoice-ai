@@ -18,7 +18,8 @@
             padding: 6rem 0;
             background: linear-gradient(rgba(var(--bs-primary-rgb), 0.1), rgba(var(--bs-primary-rgb), 0.05));
             border-radius: 1rem;
-            margin-bottom: 4rem;
+            margin: 2rem auto 4rem;
+            max-width: 90%;
         }
         
         .feature-icon {
@@ -80,8 +81,24 @@
     <!-- Reading ruler for accessibility (only shown if enabled) -->
     <div class="reading-ruler"></div>
     
-    <!-- Include the new navbar component -->
-    {% include 'components/navbar.html' %}
+    <!-- Include the navbar component only if logged in (for homepage) -->
+    {% if is_logged_in %}
+        {% include 'components/navbar.html' %}
+    {% else %}
+        <!-- Simple header with login buttons for non-authenticated users -->
+        <header class="py-3">
+            <div class="container">
+                <div class="d-flex justify-content-end">
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-light rounded-pill me-2 shadow-sm">
+                        <i class="bi bi-google me-1"></i> Login
+                    </a>
+                    <a href="{{ url_for('guest_access') }}" class="btn btn-outline-light rounded-pill shadow-sm">
+                        <i class="bi bi-person me-1"></i> Guest
+                    </a>
+                </div>
+            </div>
+        </header>
+    {% endif %}
     
     <!-- Main Content -->
     <div class="container">
@@ -163,7 +180,7 @@
         <!-- Features Section -->
         <section class="features-section">
             <h2 class="text-center display-5 mb-5">Features</h2>
-            <div class="row g-4">
+            <div class="row g-4 justify-content-center">
                 <!-- Feature 1 -->
                 <div class="col-md-6 col-lg-3">
                     <div class="feature-card text-center">
