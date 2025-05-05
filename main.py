@@ -337,6 +337,11 @@ def get_user_settings():
         db.session.add(settings)
         db.session.commit()
         logger.info(f"Created new user settings for session/user: {session_id}")
+    else:
+        # Check if daily counters need to be reset
+        if settings.check_daily_reset():
+            db.session.commit()
+            logger.info(f"Reset daily usage counters for user: {session_id}")
     
     return settings
 
