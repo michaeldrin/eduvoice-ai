@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, send_from_directory, redirect
 from openai import OpenAI
 # Import OpenAI exceptions - using try/except since error types might vary between versions
 from gtts import gTTS
-from models import db, Document, UserSettings, ChatMessage
+from models import db, Document, UserSettings, ChatMessage, DocumentQuestion, UserNote
 from oauth import init_oauth, auth_bp, login_required
 
 # Set up logging for debugging
@@ -2076,6 +2076,22 @@ def translate_document(document_id, translate_type='summary'):
                 logger.error(f"Error generating summary in translated language: {summary_error}")
                 # Continue without failing the translation
         
+        # Reset questions_processed flag when content is translated to trigger re-processing
+        if translate_type == 'content':
+            document.questions_processed = False
+            db.session.commit()
+            logger.info(f"Reset questions_processed flag for document {document_id} after translation")
+            
+            # Process questions automatically in the background
+            try:
+                # Only process if we're doing a content translation and auto_processed is True
+                if document.auto_processed and data.get('process_questions', False):
+                    logger.info(f"Auto-processing questions for translated document {document_id}")
+                    process_document_questions(document_id)
+            except Exception as q_error:
+                logger.error(f"Error processing questions after translation: {q_error}")
+                # Continue without failing the translation
+        
         return jsonify({
             'translated_text': translated_text,
             'language': target_language
@@ -2282,6 +2298,167 @@ def document_chat_api(document_id):
         else:
             # In production, send a generic error
             return jsonify({'error': "An unexpected error occurred. Please try again later."}), 500
+
+# API endpoint for saving notes
+@app.route('/api/document/save_note', methods=['POST'])
+@login_required
+def save_note():
+    """
+    Save a note for a document
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        # Get required fields
+        document_id = data.get('document_id')
+        content = data.get('content')
+        title = data.get('title', 'Untitled Note')
+        language = data.get('language', 'en')
+        note_id = data.get('note_id')
+        
+        # Validate fields
+        if not document_id or not content:
+            return jsonify({'error': 'Missing required fields'}), 400
+            
+        # Security: check if user owns the document
+        document = Document.query.get_or_404(document_id)
+        current_user_id = session['user'].get('email')
+        if document.user_id != current_user_id:
+            return jsonify({'error': 'You do not have permission to add notes to this document'}), 403
+            
+        if note_id:
+            # Update existing note
+            note = UserNote.query.get(note_id)
+            if not note:
+                return jsonify({'error': 'Note not found'}), 404
+                
+            # Check if user owns the note
+            if note.user_id != current_user_id:
+                return jsonify({'error': 'You do not have permission to edit this note'}), 403
+                
+            # Update note
+            note.title = title
+            note.content = content
+            note.language = language
+            note.updated_at = datetime.datetime.utcnow()
+        else:
+            # Create new note
+            note = UserNote(
+                document_id=document_id,
+                user_id=current_user_id,
+                title=title,
+                content=content,
+                language=language
+            )
+            db.session.add(note)
+            
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'note_id': note.id,
+            'message': 'Note saved successfully'
+        })
+    
+    except Exception as e:
+        logger.exception(f"Error saving note: {e}")
+        db.session.rollback()
+        return jsonify({'error': f"Failed to save note: {str(e)}"}), 500
+
+# API endpoint for getting notes
+@app.route('/api/document/<int:document_id>/notes', methods=['GET'])
+@login_required
+def get_notes(document_id):
+    """
+    Get notes for a document
+    """
+    try:
+        # Security: check if user owns the document
+        document = Document.query.get_or_404(document_id)
+        current_user_id = session['user'].get('email')
+        if document.user_id != current_user_id:
+            return jsonify({'error': 'You do not have permission to view notes for this document'}), 403
+            
+        # Get notes for this document
+        notes = UserNote.query.filter_by(
+            document_id=document_id,
+            user_id=current_user_id
+        ).order_by(UserNote.updated_at.desc()).all()
+        
+        notes_list = [note.to_dict() for note in notes]
+        
+        return jsonify({
+            'success': True,
+            'notes': notes_list
+        })
+    
+    except Exception as e:
+        logger.exception(f"Error getting notes: {e}")
+        return jsonify({'error': f"Failed to get notes: {str(e)}"}), 500
+
+# Process document questions route
+@app.route('/process_document_questions/<int:document_id>', methods=['POST'])
+@login_required
+def process_document_questions_route(document_id):
+    """
+    Process a document to extract or generate questions
+    """
+    document = Document.query.get_or_404(document_id)
+    
+    # Check authorization
+    if document.user_id != session.get('user', {}).get('email'):
+        flash('You do not have permission to access this document.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Check if document is already processed
+    if document.questions_processed:
+        flash('Document questions have already been processed.', 'info')
+        return redirect(url_for('document_questions', document_id=document_id))
+    
+    # Process the document questions
+    success, error = process_document_questions(document_id)
+    
+    if not success:
+        flash(f'Error processing document questions: {error}', 'danger')
+        return redirect(url_for('document_preview', document_id=document_id))
+    
+    flash('Document questions have been processed successfully.', 'success')
+    return redirect(url_for('document_questions', document_id=document_id))
+
+# Document questions view
+@app.route('/document/<int:document_id>/questions')
+@login_required
+def document_questions(document_id):
+    """
+    Display questions and answers for a document
+    """
+    document = Document.query.get_or_404(document_id)
+    
+    # Check authorization
+    if document.user_id != session.get('user', {}).get('email'):
+        flash('You do not have permission to access this document.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Process questions if not already done
+    if not document.questions_processed:
+        success, error = process_document_questions(document_id)
+        if not success:
+            flash(f'Error processing document questions: {error}', 'warning')
+    
+    # Get questions for this document
+    questions = DocumentQuestion.query.filter_by(document_id=document_id).all()
+    
+    # Get user settings
+    user_settings = get_user_settings()
+    
+    return render_template(
+        'document_questions.html',
+        document=document,
+        questions=questions,
+        user_settings=user_settings
+    )
 
 # Dashboard route to view upload history
 @app.route('/dashboard')
