@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "email-validator>=2.2.0",
     "fastapi>=0.115.12",
+    "flask-login>=0.6.3",
     "flask>=3.1.0",
     "flask-sqlalchemy>=3.1.1",
     "gtts>=2.5.4",
@@ -16,4 +17,7 @@ dependencies = [
     "pymupdf>=1.25.5",
     "python-docx>=1.1.2",
     "uvicorn>=0.34.2",
+    "oauthlib>=3.2.2",
+    "authlib>=1.5.2",
+    "requests>=2.32.3",
 ]
