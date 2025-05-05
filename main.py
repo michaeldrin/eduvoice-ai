@@ -235,8 +235,19 @@ def translate_text(text, target_language, source_language='en'):
     try:
         logger.info(f"Translating text from {source_language_name} to {target_language_name}")
         
-        # Build system message
-        system_message = f"You are a professional translator. Translate the following text from {source_language_name} to {target_language_name}. Preserve formatting, maintain the same tone, and ensure accuracy."
+        # Build detailed system message for high-quality translation
+        system_message = f"""You are a professional academic translator specializing in {source_language_name} to {target_language_name} translation.
+
+        Your translation must:
+        1. Preserve the original text's formatting, structure, and paragraph breaks
+        2. Maintain the academic tone and formality level of the source text
+        3. Accurately translate specialized terminology while ensuring clarity for students
+        4. Adapt idioms and cultural references appropriately for {target_language_name} speakers
+        5. Keep numerical data and factual information precisely as they appear in the source
+
+        Focus on producing a natural, fluent translation that reads as if it were originally written in {target_language_name},
+        while remaining completely faithful to the source material.
+        """
         
         # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
         # do not change this unless explicitly requested by the user
@@ -479,12 +490,19 @@ def generate_chat_response(document_id, user_message, language=None):
         if len(document.text_content) > max_content_length:
             document_content += " [Content truncated due to length...]"
         
-        # Create the system prompt
-        system_prompt = f"""You are an intelligent assistant that helps users understand the content of documents.
-        Respond in {language_name}.
-        The document content is provided below. Use it to answer the user's questions.
-        Be concise, accurate, and helpful. If you don't know the answer based on the document, say so.
-        Do not make up information that is not in the document.
+        # Create the system prompt for multilingual teacher-student interaction
+        system_prompt = f"""You are an expert teacher who only speaks and responds in {language_name}.
+        You must not use any language other than {language_name} in your responses, even if the user's question contains words from another language.
+        
+        Your role is to help students understand the document content provided below.
+        Use a warm, encouraging teaching style, but remain concise and accurate.
+        If the answer isn't in the document, acknowledge this in {language_name}.
+        Never invent information not present in the document.
+        
+        Simulate a real teacher-student interaction in {language_name} by:
+        - Using culturally appropriate teaching expressions in {language_name}
+        - Adapting explanations to be clear for {language_name} speakers
+        - Explaining complex concepts using simple vocabulary suitable for non-native speakers
         
         DOCUMENT CONTENT:
         {document_content}
@@ -647,11 +665,13 @@ def generate_initial_chat_message(document, language=None):
         # Default to English if language is not in our mapping
         language_name = language_names.get(language, 'English')
         
-        # Create the system prompt
-        system_prompt = f"""You are an intelligent assistant that helps users understand documents.
-        Respond in {language_name}.
-        You need to create a brief, friendly welcome message for a document chat.
-        Include 2-3 specific suggested questions the user could ask about this document.
+        # Create the system prompt for teacher-student interaction
+        system_prompt = f"""You are a friendly, supportive teacher who only speaks {language_name}.
+        Create a warm, welcoming message introducing yourself as a teacher specializing in document analysis.
+        You must respond only in {language_name}, using culturally appropriate expressions and teaching style.
+        
+        Include 2-3 specific suggested questions the student could ask about this document to start their learning journey.
+        Make these questions appropriate for the document content and educational in nature.
         
         DOCUMENT SUMMARY:
         Title: {document.filename}
@@ -790,18 +810,30 @@ def generate_summary(text, target_language=None):
         try:
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
-            prompt = f"Summarize the following text in {language_name} as clearly as possible for a student:\n\n{text}"
+            
+            # Create a system prompt for educational summarization
+            system_prompt = f"""You are a professional education specialist who creates summaries in {language_name}.
+            Your task is to summarize academic content for student use, focusing on:
+            1. Key concepts and main ideas, clearly organized
+            2. Important facts and supporting evidence
+            3. Clear explanations of specialized terminology (if any)
+            4. Logical structure with clear beginning, middle, and conclusion
+            
+            Create a summary that would help a student quickly understand the core information.
+            Your summary should be written in a clear, educational style appropriate for {language_name} speakers.
+            Adapt your writing style to the conventions of academic writing in {language_name}-speaking countries.
+            """
             
             # Call the OpenAI API
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}. Focus on key points and main ideas, making the content easily understandable for students."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Please summarize the following text in {language_name}:\n\n{text}"}
                 ],
-                max_tokens=500,
+                max_tokens=600,  # Slightly longer for better educational summaries
                 temperature=0.3,  # Lower temperature for more focused summaries
-                timeout=20  # Add timeout to prevent long-running requests
+                timeout=25  # Slightly more time for processing longer educational summaries
             )
             
             # Extract the summary from the response
