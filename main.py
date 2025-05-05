@@ -1,11 +1,13 @@
 import logging
 import os
 import datetime
+import uuid
 import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
 from openai import OpenAI
+from gtts import gTTS
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -114,6 +116,59 @@ def generate_summary(text):
     except Exception as e:
         logger.error(f"Error generating summary with OpenAI: {e}")
         return None, f"Error generating summary: {str(e)}"
+
+# Helper function to convert text to speech using gTTS
+def text_to_speech(text, filename=None):
+    """
+    Convert text to speech using Google Text-to-Speech (gTTS)
+    and save it as an MP3 file in the static/audio directory
+    
+    Args:
+        text (str): The text to convert to speech
+        filename (str, optional): A specific filename to use. 
+                                If None, a UUID will be generated.
+                                
+    Returns:
+        tuple: (audio_filename, error_message)
+    """
+    try:
+        # Check if text is empty
+        if not text or len(text.strip()) == 0:
+            logger.error("Empty text provided for text-to-speech conversion")
+            return None, "Cannot convert empty text to speech."
+        
+        # Create the audio directory if it doesn't exist
+        audio_dir = os.path.join('static', 'audio')
+        os.makedirs(audio_dir, exist_ok=True)
+        
+        # Generate a unique filename if one is not provided
+        if not filename:
+            filename = f"speech_{uuid.uuid4().hex}.mp3"
+        elif not filename.endswith('.mp3'):
+            filename = f"{filename}.mp3"
+            
+        # Full path to the audio file
+        audio_path = os.path.join(audio_dir, filename)
+        
+        # Limit text length for TTS if needed (gTTS has limits)
+        max_tts_length = 5000  # Characters
+        if len(text) > max_tts_length:
+            text = text[:max_tts_length] + "... Text has been truncated for audio conversion."
+            logger.info(f"Text truncated for TTS (length: {len(text)})")
+        
+        # Create gTTS object
+        tts = gTTS(text=text, lang='en', slow=False)
+        
+        # Save the audio file
+        tts.save(audio_path)
+        logger.info(f"Audio file created: {filename}")
+        
+        # Return the filename (without the full path)
+        return filename, None
+        
+    except Exception as e:
+        logger.error(f"Error in text-to-speech conversion: {e}")
+        return None, f"Error converting text to speech: {str(e)}"
 
 # Define routes
 @app.route("/")
@@ -271,7 +326,23 @@ def summarize_text():
             error=f"Failed to generate summary: {error}"
         )
     
-    # Render summary template
+    # Generate audio from the summary text
+    audio_file = None
+    audio_error = None
+    
+    if summary:
+        # Create a unique audio filename based on the document name
+        base_filename = os.path.splitext(filename)[0]
+        safe_filename = secure_filename(f"{base_filename}_summary")
+        
+        # Convert the summary to speech
+        audio_file, audio_error = text_to_speech(summary, safe_filename)
+        
+        if audio_error:
+            logger.error(f"Error in text-to-speech conversion: {audio_error}")
+            # We'll continue without audio if there's an error, but we'll include the error message
+    
+    # Render summary template with the audio file if available
     return render_template(
         "summary.html",
         title="Document Summary",
@@ -280,7 +351,9 @@ def summarize_text():
         extracted_text=extracted_text,
         total_length=total_length,
         truncated=truncated,
-        summary=summary
+        summary=summary,
+        audio_file=audio_file,
+        audio_error=audio_error
     )
 
 # Add upload link to the homepage
@@ -292,6 +365,14 @@ def inject_upload_url():
 @app.route('/static/<path:path>')
 def send_static(path):
     return send_from_directory('static', path)
+
+# Serve audio files directly if needed
+@app.route('/audio/<path:filename>')
+def serve_audio(filename):
+    """
+    Serve audio files directly
+    """
+    return send_from_directory('static/audio', filename)
 
 # Error handling
 @app.errorhandler(404)

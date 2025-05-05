@@ -54,10 +54,27 @@
                                     <i class="bi bi-robot"></i> AI-Generated Summary
                                 </div>
                                 <div class="card-body">
-                                    <div class="summary-content">{{ summary|safe }}</div>
+                                    <div class="summary-content mb-4">{{ summary|safe }}</div>
+                                    
+                                    {% if audio_file %}
+                                    <div class="audio-player mt-4">
+                                        <h6 class="mb-3"><i class="bi bi-volume-up"></i> Listen to the summary:</h6>
+                                        <audio controls class="w-100">
+                                            <source src="{{ url_for('static', filename='audio/' + audio_file) }}" type="audio/mpeg">
+                                            Your browser does not support the audio element.
+                                        </audio>
+                                        <div class="text-muted mt-2">
+                                            <small>Text-to-speech generated using Google's TTS</small>
+                                        </div>
+                                    </div>
+                                    {% elif audio_error %}
+                                    <div class="alert alert-warning mt-3" role="alert">
+                                        <i class="bi bi-exclamation-triangle"></i> {{ audio_error }}
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 <div class="card-footer text-muted">
-                                    <small>Generated using OpenAI's API</small>
+                                    <small>Summary generated using OpenAI's API</small>
                                 </div>
                             </div>
                             
