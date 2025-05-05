@@ -379,13 +379,15 @@ def extract_text_from_docx(file_path):
         return None, f"Error processing DOCX file: {str(e)}"
 
 # Helper function to generate a chat response for document Q&A
-def generate_chat_response(document_id, user_message):
+def generate_chat_response(document_id, user_message, language=None):
     """
     Generate a response to a user question about a document using OpenAI API
     
     Args:
         document_id (int): The ID of the document to chat about
         user_message (str): The user's question or message
+        language (str, optional): The language code to use for the response. If None,
+                                  will use document language or user settings.
         
     Returns:
         tuple: (response_text, error_message)
@@ -432,13 +434,15 @@ def generate_chat_response(document_id, user_message):
             
         # Get document and user language preference
         try:
-            # First try to use the document language
-            language = document.language
-            
-            # If not set, fall back to user settings
+            # First use the language parameter if provided
             if not language:
-                settings = get_user_settings()
-                language = settings.language
+                # If no language parameter was provided, use document language
+                language = document.language
+                
+                # If document language is not set, fall back to user settings
+                if not language:
+                    settings = get_user_settings()
+                    language = settings.language
         except Exception as settings_error:
             logger.error(f"Error retrieving language settings: {settings_error}")
             language = 'en'  # Default to English on error
@@ -588,12 +592,14 @@ def generate_chat_response(document_id, user_message):
             return None, "An unexpected error occurred. Please try again later."
 
 # Helper function to generate an initial welcome message for document chat
-def generate_initial_chat_message(document):
+def generate_initial_chat_message(document, language=None):
     """
     Generate an initial welcome message for a document chat
     
     Args:
         document (Document): The document to generate a welcome message for
+        language (str, optional): The language code to use for the message. If None,
+                                  will use document language or user settings.
         
     Returns:
         str: The welcome message
@@ -608,14 +614,16 @@ def generate_initial_chat_message(document):
             logger.error(f"OpenAI API key validation failed: {error}")
             return None
             
-        # Try to use document language first, then fall back to user settings
+        # First use the language parameter if provided
         try:
-            language = document.language
-            
-            # If document language is not set, fall back to user settings
             if not language:
-                settings = get_user_settings()
-                language = settings.language
+                # If no language parameter was provided, use document language
+                language = document.language
+                
+                # If document language is not set, fall back to user settings
+                if not language:
+                    settings = get_user_settings()
+                    language = settings.language
         except Exception as lang_error:
             logger.error(f"Error retrieving language settings: {lang_error}")
             language = 'en'  # Default to English on error
