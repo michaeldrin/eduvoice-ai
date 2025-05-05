@@ -407,16 +407,28 @@ def upload_file():
             # Extract text based on file type
             try:
                 extracted_text = ""
+                error_message = None
+                
                 if file_type == 'pdf':
-                    extracted_text = extract_text_from_pdf(file_path)
+                    extracted_text, error_message = extract_text_from_pdf(file_path)
                 elif file_type == 'docx':
-                    extracted_text = extract_text_from_docx(file_path)
+                    extracted_text, error_message = extract_text_from_docx(file_path)
                 else:
                     logger.error(f"Unsupported file type for text extraction: {file_type}")
                     return render_template(
                         "upload.html",
                         title="File Upload",
                         error=f"Cannot extract text from {file_type.upper()} files",
+                        usage_stats=user_settings
+                    )
+                
+                # Check if text extraction was successful
+                if error_message or not extracted_text:
+                    logger.error(f"Text extraction failed for {filename}: {error_message}")
+                    return render_template(
+                        "upload.html",
+                        title="File Upload",
+                        error=error_message or "Failed to extract text from the file.",
                         usage_stats=user_settings
                     )
                 
@@ -689,20 +701,30 @@ def dashboard():
     """
     logger.debug("Accessing dashboard route")
     
-    # Get the current user settings
-    user_settings = get_user_settings()
-    
     try:
-        # Query all documents from the database, ordered by upload time (newest first)
-        documents = Document.query.order_by(Document.upload_time.desc()).all()
+        # Get the current user settings
+        user_settings = get_user_settings()
         
-        # Render the dashboard template with the documents
-        return render_template(
-            "dashboard.html",
-            title="Upload History Dashboard",
-            documents=documents,
-            usage_stats=user_settings
-        )
+        try:
+            # Query all documents from the database, ordered by upload time (newest first)
+            documents = Document.query.order_by(Document.upload_time.desc()).all()
+            
+            # Render the dashboard template with the documents
+            return render_template(
+                "dashboard.html",
+                title="Upload History Dashboard",
+                documents=documents,
+                usage_stats=user_settings
+            )
+        except Exception as db_error:
+            logger.error(f"Error querying documents: {db_error}")
+            return render_template(
+                "dashboard.html",
+                title="Upload History Dashboard",
+                error="Could not load documents. Please try again later.",
+                documents=[],
+                usage_stats=user_settings
+            )
     except Exception as e:
         logger.error(f"Error accessing dashboard: {e}")
         return render_template(
@@ -710,7 +732,7 @@ def dashboard():
             title="Error",
             error=f"Could not load dashboard: {str(e)}",
             request=request,
-            usage_stats=user_settings
+            usage_stats=None
         )
 
 # Settings route to customize user preferences
