@@ -564,7 +564,19 @@ def generate_summary(text):
         client, error = validate_openai_api()
         if error:
             logger.error(f"OpenAI API key validation failed: {error}")
-            return None, error
+            
+            # FALLBACK LOGIC: Return a generic summary message when API fails
+            if app.debug:
+                # In debug mode, include the error message
+                logger.warning("Using fallback summary due to API error")
+                fallback_summary = f"[FALLBACK SUMMARY USED - API ERROR: {error}]\n\n"
+                fallback_summary += "This is a computer-generated summary of the document you uploaded. "
+                fallback_summary += "The summary focuses on the key points and main ideas presented in the text. "
+                fallback_summary += "For a more detailed analysis, please read the original document."
+                return fallback_summary, None
+            else:
+                # In production, just return the error
+                return None, error
             
         # Get user settings for language preference
         settings = get_user_settings()
@@ -594,7 +606,8 @@ def generate_summary(text):
                     {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=500
+                max_tokens=500,
+                timeout=20  # Add timeout to prevent long-running requests
             )
             
             # Extract the summary from the response
@@ -609,11 +622,29 @@ def generate_summary(text):
         except Exception as api_error:
             error_message = handle_openai_error(api_error)
             logger.error(f"OpenAI API error in summary generation: {error_message}")
-            return None, error_message
+            
+            # FALLBACK LOGIC: Provide a generic summary for testing when API fails
+            if app.debug:
+                logger.warning("Using fallback summary due to API error")
+                fallback_summary = f"[FALLBACK SUMMARY USED - API ERROR: {error_message}]\n\n"
+                fallback_summary += "This is a fallback summary of the document you uploaded. "
+                fallback_summary += "The original content contained approximately {len(text)} characters. "
+                fallback_summary += "We're currently unable to generate a real summary due to API issues."
+                return fallback_summary, None
+            else:
+                return None, error_message
         
     except Exception as e:
         logger.exception(f"Error generating summary with OpenAI: {e}")
-        return None, f"Error generating summary: {str(e)}"
+        
+        # FALLBACK LOGIC: Return a generic error message with detailed logging
+        if app.debug:
+            fallback_summary = f"[DEBUG MODE FALLBACK - GENERAL ERROR: {str(e)}]\n\n"
+            fallback_summary += "This is a placeholder summary due to an error in the summarization process. "
+            fallback_summary += "Check the application logs for more details about this error."
+            return fallback_summary, None
+        else:
+            return None, f"Error generating summary: {str(e)}"
 
 # Helper function to get or create user settings
 def get_user_settings():
@@ -1796,11 +1827,29 @@ def request_entity_too_large_error(e):
         f"The file you're trying to upload is too large. Maximum allowed size is {app.config['MAX_CONTENT_LENGTH'] / (1024 * 1024):.1f} MB."
     )
 
+@app.errorhandler(405)
+def method_not_allowed_error(e):
+    """Handle 405 Method Not Allowed errors"""
+    # Get the list of allowed methods if available
+    methods = getattr(e, 'valid_methods', None)
+    methods_str = f"Allowed methods: {', '.join(methods)}" if methods else "Method not allowed for this URL"
+    
+    # Log the detailed error
+    logger.error(f"Method Not Allowed: {request.method} {request.path} - {methods_str}")
+    
+    return handle_error(
+        e,
+        405,
+        "Method Not Allowed",
+        f"The request method {request.method} is not allowed for this URL. {methods_str}",
+        show_details=app.debug
+    )
+
 @app.errorhandler(500)
 def server_error_handler(e):
     """Handle 500 Internal Server Error"""
     # In production, show detailed error information for debugging
-    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    debug_mode = os.environ.get('FLASK_ENV') == 'development' or app.debug
     
     return handle_error(
         e, 
@@ -1813,13 +1862,20 @@ def server_error_handler(e):
 @app.errorhandler(Exception)
 def unhandled_exception(e):
     """Handle any unhandled exceptions"""
-    logger.exception("Unhandled exception occurred")
+    logger.exception(f"Unhandled exception occurred: {str(e)}")
+    
+    # Include more details in debug mode
+    if app.debug:
+        error_details = f"Details: {str(e)}\n\nTraceback: {traceback.format_exc()}"
+    else:
+        error_details = "An unexpected error occurred. Our technical team has been notified."
+    
     return handle_error(
         e, 
         500, 
         "Unexpected Error", 
-        "An unexpected error occurred. Our technical team has been notified.",
-        show_details=False
+        error_details,
+        show_details=app.debug
     )
 
 # Guest access route
