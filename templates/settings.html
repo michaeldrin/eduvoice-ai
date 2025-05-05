@@ -89,6 +89,57 @@
                         <!-- Include usage stats component -->
                         {% include 'usage_stats.html' %}
                         
+                        <!-- Development Mode Section (only visible when testing mode is active) -->
+                        {% if testing_mode %}
+                        <div class="settings-section">
+                            <div class="settings-section-title">
+                                <i class="bi bi-tools text-warning"></i>
+                                <h3>Development Mode</h3>
+                            </div>
+                            
+                            <div class="alert alert-warning">
+                                <strong><i class="bi bi-exclamation-triangle-fill me-2"></i>Developer Notice</strong>
+                                <p class="mb-0">Testing mode is active with increased usage limits. Remember to disable this before production.</p>
+                            </div>
+                            
+                            <div class="card shadow-sm mb-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Current Test Limits</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Resource</th>
+                                                <th>Test Limit</th>
+                                                <th>Production Limit</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>Daily Uploads</td>
+                                                <td>500</td>
+                                                <td>5</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Total Summaries</td>
+                                                <td>100</td>
+                                                <td>10</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Audio Minutes</td>
+                                                <td>500</td>
+                                                <td>15</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <p class="text-muted small">To disable testing mode, set <code>TESTING_MODE = False</code> in models.py</p>
+                        </div>
+                        {% endif %}
+                        
                         {% if success %}
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
                             <i class="bi bi-check-circle-fill me-2"></i> {{ success }}

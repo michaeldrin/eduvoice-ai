@@ -1421,13 +1421,17 @@ def inject_global_variables():
     # Check if user is logged in via Google OAuth
     google_user = session.get('user', None)
     
+    # Import the UserSettings class for its testing mode flag
+    from models import UserSettings
+    
     return {
         'upload_url': url_for('upload_file'),
         'user_settings': user_settings,
         'theme_mode': user_settings.theme_mode if user_settings else 'dark',
         'accessibility_classes': accessibility_class_string,
         'google_user': google_user,
-        'is_logged_in': google_user is not None
+        'is_logged_in': google_user is not None,
+        'testing_mode': UserSettings.TESTING_MODE  # Add testing mode flag to all templates
     }
 
 # Serve static files

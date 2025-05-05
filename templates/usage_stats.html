@@ -4,7 +4,11 @@
         <h5 class="mb-0">
             <i class="bi bi-speedometer2 me-2"></i> Usage Stats
         </h5>
+        {% if testing_mode %}
+        <span class="badge bg-warning text-dark">DEV MODE</span>
+        {% else %}
         <span class="badge bg-secondary">Free Tier</span>
+        {% endif %}
     </div>
     {% if is_logged_in %}
     <div class="card-body p-3">
@@ -75,6 +79,14 @@
         {% endif %}
     </div>
     <div class="card-footer text-center">
+        {% if testing_mode %}
+        <div class="mb-2">
+            <small class="text-warning">
+                <i class="bi bi-info-circle-fill me-1"></i>
+                Testing Mode: Higher usage limits enabled (500 uploads, 100 summaries, 500 audio minutes)
+            </small>
+        </div>
+        {% endif %}
         <small class="text-muted">Last reset: {{ usage_stats.last_reset_date }}</small>
     </div>
     {% else %}
