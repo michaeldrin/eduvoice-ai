@@ -28,6 +28,58 @@ class ChatMessage(db.Model):
             'language': self.language
         }
 
+class DocumentQuestion(db.Model):
+    """Model for questions extracted from or generated for documents"""
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('document.id'), nullable=False)
+    question_text = db.Column(db.Text, nullable=False)
+    answer_text = db.Column(db.Text, nullable=True)  # AI-generated answer
+    is_extracted = db.Column(db.Boolean, default=False)  # True if extracted from document, False if generated
+    language = db.Column(db.String(10), default='en')  # Language of the question/answer
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<DocumentQuestion {self.id}>'
+    
+    def to_dict(self):
+        """Convert question to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'document_id': self.document_id,
+            'question_text': self.question_text,
+            'answer_text': self.answer_text,
+            'is_extracted': self.is_extracted,
+            'language': self.language,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+class UserNote(db.Model):
+    """Model for user notes related to documents"""
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('document.id'), nullable=False)
+    user_id = db.Column(db.String(255), nullable=False)  # User's email or guest ID
+    title = db.Column(db.String(255), default="Untitled Note")
+    content = db.Column(db.Text, nullable=False)  # Rich text content (HTML)
+    language = db.Column(db.String(10), default='en')  # Language of the note
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<UserNote {self.id}: {self.title}>'
+    
+    def to_dict(self):
+        """Convert note to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'document_id': self.document_id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'content': self.content,
+            'language': self.language,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }
+
 class Document(db.Model):
     """Model for uploaded documents and their summaries"""
     id = db.Column(db.Integer, primary_key=True)
@@ -46,9 +98,12 @@ class Document(db.Model):
     translated_language = db.Column(db.String(10), nullable=True)  # Target language for translation
     translated_summary = db.Column(db.Text, nullable=True)  # Store the translated summary
     translated_content = db.Column(db.Text, nullable=True)  # Store the translated text content
+    questions_processed = db.Column(db.Boolean, default=False)  # Flag to track if questions were processed
     
-    # Relationship with chat messages
+    # Relationships
     chat_messages = db.relationship('ChatMessage', backref='document', lazy=True, cascade="all, delete-orphan")
+    questions = db.relationship('DocumentQuestion', backref='document', lazy=True, cascade="all, delete-orphan")
+    notes = db.relationship('UserNote', backref='document', lazy=True, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f'<Document {self.filename}>'
@@ -69,7 +124,10 @@ class Document(db.Model):
             'language': self.language,
             'translated_language': self.translated_language,
             'translated_summary': self.translated_summary,
-            'has_translated_content': self.translated_content is not None
+            'has_translated_content': self.translated_content is not None,
+            'questions_processed': self.questions_processed,
+            'question_count': len(self.questions) if self.questions else 0,
+            'note_count': len(self.notes) if self.notes else 0
         }
 
 class UserSettings(db.Model):

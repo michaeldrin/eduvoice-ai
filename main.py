@@ -610,6 +610,324 @@ def generate_chat_response(document_id, user_message, language=None):
             return None, "An unexpected error occurred. Please try again later."
 
 # Helper function to generate an initial welcome message for document chat
+def extract_questions_from_text(text, language='en'):
+    """
+    Extract questions from document text using OpenAI
+    
+    Args:
+        text (str): Text to extract questions from
+        language (str, optional): Language of the text. Defaults to 'en'.
+        
+    Returns:
+        tuple: (list of question dictionaries, error_message)
+    """
+    if not text:
+        return None, "No text provided for question extraction"
+        
+    logger.info(f"Extracting questions from text in language: {language}")
+    
+    # Validate OpenAI API key
+    client, error = validate_openai_api()
+    if error:
+        return None, error
+    
+    try:
+        # Create a system message for the question extraction
+        system_message = f"""You are an expert educator and question identifier.
+        Your task is to carefully analyze educational text and extract all questions that appear explicitly in the document.
+        Only extract questions that are clearly formulated as questions in the text.
+        Include the exact question text found in the document.
+        """
+        
+        # Create a prompt for question extraction
+        prompt = f"""Here is the educational text in {language}:
+
+{text[:4000]}  # Limit text length to avoid token issues
+
+Please identify and extract all explicit questions from this document. 
+For each question found, provide:
+1. The exact question text as it appears in the document
+2. The approximate location in the document (beginning, middle, or end)
+
+Format your response as a JSON array of objects with keys 'question' and 'location'.
+If no explicit questions are found in the text, return an empty array [].
+"""
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=2000,
+            temperature=0.3
+        )
+        
+        # Extract and parse the response
+        result = json.loads(response.choices[0].message.content)
+        
+        # Ensure we have a consistent format with questions list
+        if 'questions' in result:
+            questions = result['questions']
+        else:
+            # Handle case where response might be differently structured
+            questions = result.get('results', [])
+            if not questions and isinstance(result, list):
+                questions = result
+        
+        return questions, None
+    
+    except Exception as e:
+        error_message = handle_openai_error(e)
+        logger.error(f"Error extracting questions: {error_message}")
+        return None, error_message
+
+def generate_educational_questions(text, language='en', num_questions=5):
+    """
+    Generate educational questions based on document content
+    
+    Args:
+        text (str): Document text to base questions on
+        language (str, optional): Language for questions. Defaults to 'en'.
+        num_questions (int, optional): Number of questions to generate. Defaults to 5.
+        
+    Returns:
+        tuple: (list of question dictionaries, error_message)
+    """
+    if not text:
+        return None, "No text provided for question generation"
+        
+    logger.info(f"Generating {num_questions} educational questions in {language}")
+    
+    # Validate OpenAI API key
+    client, error = validate_openai_api()
+    if error:
+        return None, error
+    
+    try:
+        # Create a system message for educational question generation
+        system_message = f"""You are an expert educator specializing in creating high-quality educational questions.
+        Your questions should promote critical thinking and deep understanding of the content.
+        Create varied questions that test different levels of knowledge (recall, understanding, application, analysis).
+        """
+        
+        # Create a prompt for question generation
+        prompt = f"""Based on the following educational content in {language}:
+
+{text[:4000]}  # Limit text length to avoid token issues
+
+Generate {num_questions} educational questions that would be appropriate for testing understanding of this content.
+For each question:
+1. Create a clear, well-formulated question
+2. Provide a detailed, educational answer that explains the concept thoroughly
+3. Target different levels of cognitive understanding (basic recall, comprehension, application, analysis)
+
+Format your response as a JSON array with objects containing 'question' and 'answer' keys.
+Ensure the questions and answers are in {language}.
+"""
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=3000,
+            temperature=0.7  # Higher temperature for more creative questions
+        )
+        
+        # Extract and parse the response
+        result = json.loads(response.choices[0].message.content)
+        
+        # Ensure we have a consistent format
+        if 'questions' in result:
+            questions = result['questions']
+        else:
+            questions = result.get('results', [])
+            if not questions and isinstance(result, list):
+                questions = result
+        
+        return questions, None
+    
+    except Exception as e:
+        error_message = handle_openai_error(e)
+        logger.error(f"Error generating questions: {error_message}")
+        return None, error_message
+
+def answer_educational_question(question, document_text, language='en'):
+    """
+    Generate an educational answer to a question based on document content
+    
+    Args:
+        question (str): The question to answer
+        document_text (str): Document text to base the answer on
+        language (str, optional): Language for the answer. Defaults to 'en'.
+        
+    Returns:
+        tuple: (answer_text, error_message)
+    """
+    if not question or not document_text:
+        return None, "Question or document text is missing"
+        
+    logger.info(f"Generating educational answer in {language}")
+    
+    # Validate OpenAI API key
+    client, error = validate_openai_api()
+    if error:
+        return None, error
+    
+    try:
+        # Create a system message for educational answer generation
+        system_message = f"""You are an expert educator tasked with answering student questions.
+        You should provide thorough, educational answers that help students understand concepts deeply.
+        Base your answers only on the document content provided.
+        If the answer cannot be found in the document, acknowledge this limitation clearly.
+        """
+        
+        # Create a prompt for answer generation
+        prompt = f"""Based on the following educational document in {language}:
+
+{document_text[:3000]}  # Limit text length to avoid token issues
+
+Please answer this student question in {language}:
+{question}
+
+Provide a thorough, educational answer that:
+1. Directly addresses the question
+2. Uses information only from the provided document
+3. Explains concepts clearly and pedagogically
+4. Includes relevant examples or context from the document if available
+"""
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.4
+        )
+        
+        # Extract the answer
+        answer = response.choices[0].message.content
+        
+        return answer, None
+    
+    except Exception as e:
+        error_message = handle_openai_error(e)
+        logger.error(f"Error generating answer: {error_message}")
+        return None, error_message
+
+def process_document_questions(document_id):
+    """
+    Process a document to extract or generate questions and answers
+    
+    Args:
+        document_id (int): The ID of the document to process
+        
+    Returns:
+        tuple: (success, error_message)
+    """
+    logger.info(f"Processing questions for document ID: {document_id}")
+    
+    try:
+        # Get the document
+        document = Document.query.get(document_id)
+        if not document:
+            return False, "Document not found"
+            
+        # Determine which content to use based on language
+        if document.translated_content and document.translated_language:
+            content = document.translated_content
+            language = document.translated_language
+        else:
+            content = document.text_content
+            language = document.language
+            
+        if not content:
+            return False, "No text content available for processing"
+            
+        # First try to extract questions from the document
+        extracted_questions, error = extract_questions_from_text(content, language)
+        if error:
+            logger.error(f"Error extracting questions: {error}")
+            return False, f"Error extracting questions: {error}"
+            
+        # Store extracted questions if any were found
+        questions_found = False
+        if extracted_questions and len(extracted_questions) > 0:
+            for q_data in extracted_questions:
+                question_text = q_data.get('question', '')
+                if question_text:
+                    # Generate answer for this question
+                    answer_text, error = answer_educational_question(question_text, content, language)
+                    if error:
+                        logger.warning(f"Could not generate answer for question: {error}")
+                        answer_text = "No answer available."
+                    
+                    # Save to database
+                    question = DocumentQuestion(
+                        document_id=document_id,
+                        question_text=question_text,
+                        answer_text=answer_text,
+                        is_extracted=True,
+                        language=language
+                    )
+                    db.session.add(question)
+                    questions_found = True
+                    
+        # If no questions were extracted, generate some
+        if not questions_found:
+            logger.info("No questions found in document, generating questions")
+            generated_questions, error = generate_educational_questions(content, language, num_questions=5)
+            if error:
+                logger.error(f"Error generating questions: {error}")
+                return False, f"Error generating questions: {error}"
+                
+            # Store generated questions
+            if generated_questions and len(generated_questions) > 0:
+                for q_data in generated_questions:
+                    question_text = q_data.get('question', '')
+                    answer_text = q_data.get('answer', '')
+                    
+                    if question_text:
+                        # If no answer was provided, generate one
+                        if not answer_text:
+                            answer_text, error = answer_educational_question(question_text, content, language)
+                            if error:
+                                logger.warning(f"Could not generate answer for question: {error}")
+                                answer_text = "No answer available."
+                        
+                        # Save to database
+                        question = DocumentQuestion(
+                            document_id=document_id,
+                            question_text=question_text,
+                            answer_text=answer_text,
+                            is_extracted=False,
+                            language=language
+                        )
+                        db.session.add(question)
+        
+        # Mark document as processed
+        document.questions_processed = True
+        db.session.commit()
+        
+        return True, None
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error processing document questions: {str(e)}")
+        return False, f"Error processing document questions: {str(e)}"
+
 def generate_initial_chat_message(document, language=None):
     """
     Generate an initial welcome message for a document chat
