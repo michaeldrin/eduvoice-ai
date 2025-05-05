@@ -27,3 +27,27 @@ class Document(db.Model):
             'audio_filename': self.audio_filename,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S')
         }
+
+class UserSettings(db.Model):
+    """Model for user settings and preferences"""
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), unique=True, nullable=False)
+    language = db.Column(db.String(10), default='en')  # Default: English
+    voice_speed = db.Column(db.String(10), default='normal')  # Slow, Normal, Fast
+    theme_mode = db.Column(db.String(10), default='dark')  # Dark or Light
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<UserSettings {self.session_id}>'
+    
+    def to_dict(self):
+        """Convert settings to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'language': self.language,
+            'voice_speed': self.voice_speed,
+            'theme_mode': self.theme_mode,
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }

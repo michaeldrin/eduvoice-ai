@@ -5,10 +5,10 @@ import uuid
 import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
 from openai import OpenAI
 from gtts import gTTS
-from models import db, Document
+from models import db, Document, UserSettings
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -106,15 +106,31 @@ def generate_summary(text):
             
         client = OpenAI(api_key=openai_api_key)
         
+        # Get user settings for language preference
+        settings = get_user_settings()
+        language = settings.language
+        
+        # Map language codes to language names for the prompt
+        language_names = {
+            'en': 'English',
+            'fa': 'Farsi',
+            'de': 'German',
+            'fr': 'French',
+            'es': 'Spanish'
+        }
+        
+        # Default to English if language is not in our mapping
+        language_name = language_names.get(language, 'English')
+        
         # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
         # do not change this unless explicitly requested by the user
-        prompt = f"Summarize the following text in simple English:\n\n{text}"
+        prompt = f"Summarize the following text in simple {language_name}:\n\n{text}"
         
         # Call the OpenAI API
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that summarizes text clearly and concisely."},
+                {"role": "system", "content": f"You are a helpful assistant that summarizes text clearly and concisely in {language_name}."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=500
@@ -132,6 +148,32 @@ def generate_summary(text):
     except Exception as e:
         logger.error(f"Error generating summary with OpenAI: {e}")
         return None, f"Error generating summary: {str(e)}"
+
+# Helper function to get or create user settings
+def get_user_settings():
+    """
+    Get or create user settings for the current session
+    
+    Returns:
+        UserSettings: The user settings for the current session
+    """
+    # Generate a session_id if not present
+    if 'session_id' not in session:
+        session['session_id'] = uuid.uuid4().hex
+    
+    session_id = session['session_id']
+    
+    # Try to find existing settings
+    settings = UserSettings.query.filter_by(session_id=session_id).first()
+    
+    # Create new settings if not found
+    if not settings:
+        settings = UserSettings(session_id=session_id)
+        db.session.add(settings)
+        db.session.commit()
+        logger.info(f"Created new user settings for session: {session_id}")
+    
+    return settings
 
 # Helper function to convert text to speech using gTTS
 def text_to_speech(text, filename=None):
@@ -172,12 +214,21 @@ def text_to_speech(text, filename=None):
             text = text[:max_tts_length] + "... Text has been truncated for audio conversion."
             logger.info(f"Text truncated for TTS (length: {len(text)})")
         
-        # Create gTTS object
-        tts = gTTS(text=text, lang='en', slow=False)
+        # Get user settings for language and voice speed
+        settings = get_user_settings()
+        
+        # Default to English if language not supported by gTTS
+        language = settings.language if settings.language in ['en', 'de', 'fr', 'es', 'it'] else 'en'
+        
+        # Set the speaking rate
+        slow_speech = settings.voice_speed == 'slow'
+        
+        # Create gTTS object with user settings
+        tts = gTTS(text=text, lang=language, slow=slow_speech)
         
         # Save the audio file
         tts.save(audio_path)
-        logger.info(f"Audio file created: {filename}")
+        logger.info(f"Audio file created: {filename} in language: {language}")
         
         # Return the filename (without the full path)
         return filename, None
@@ -413,10 +464,24 @@ def summarize_text():
         text_filename=text_filename
     )
 
-# Add upload link to the homepage
+# Add global template variables
 @app.context_processor
-def inject_upload_url():
-    return {'upload_url': url_for('upload_file')}
+def inject_global_variables():
+    """
+    Make common variables available to all templates
+    """
+    # Get user settings and make them available in all templates
+    try:
+        user_settings = get_user_settings()
+    except Exception as e:
+        logger.warning(f"Error getting user settings for template: {e}")
+        user_settings = None
+        
+    return {
+        'upload_url': url_for('upload_file'),
+        'user_settings': user_settings,
+        'theme_mode': user_settings.theme_mode if user_settings else 'dark'
+    }
 
 # Serve static files
 @app.route('/static/<path:path>')
@@ -485,6 +550,74 @@ def dashboard():
             error=f"Could not load dashboard: {str(e)}",
             request=request
         )
+
+# Settings route to customize user preferences
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    """
+    Settings page for user preferences
+    """
+    logger.debug("Accessing settings route")
+    
+    # Get the current user settings
+    user_settings = get_user_settings()
+    success_message = None
+    error_message = None
+    
+    if request.method == 'POST':
+        try:
+            # Get form data for language, voice speed, and theme
+            language = request.form.get('language', 'en')
+            voice_speed = request.form.get('voice_speed', 'normal')
+            theme_mode = request.form.get('theme_mode', 'dark')
+            
+            # Update the user settings
+            user_settings.language = language
+            user_settings.voice_speed = voice_speed
+            user_settings.theme_mode = theme_mode
+            
+            # Save the changes
+            db.session.commit()
+            
+            # Set success message
+            success_message = "Settings updated successfully!"
+            logger.info(f"User settings updated: language={language}, voice_speed={voice_speed}, theme_mode={theme_mode}")
+            
+        except Exception as e:
+            error_message = f"Error updating settings: {str(e)}"
+            logger.error(f"Error updating settings: {e}")
+    
+    # Prepare available options for the form
+    languages = [
+        {'code': 'en', 'name': 'English'},
+        {'code': 'de', 'name': 'German'},
+        {'code': 'fr', 'name': 'French'},
+        {'code': 'es', 'name': 'Spanish'},
+        {'code': 'fa', 'name': 'Farsi'}
+    ]
+    
+    voice_speeds = [
+        {'code': 'slow', 'name': 'Slow'},
+        {'code': 'normal', 'name': 'Normal'},
+        {'code': 'fast', 'name': 'Fast'}
+    ]
+    
+    theme_modes = [
+        {'code': 'dark', 'name': 'Dark Mode'},
+        {'code': 'light', 'name': 'Light Mode'}
+    ]
+    
+    # Render the settings template with the form and current settings
+    return render_template(
+        "settings.html",
+        title="User Settings",
+        user_settings=user_settings,
+        languages=languages,
+        voice_speeds=voice_speeds,
+        theme_modes=theme_modes,
+        success=success_message,
+        error=error_message
+    )
 
 # Error handling
 @app.errorhandler(404)
