@@ -557,6 +557,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('notes-tab').addEventListener('shown.bs.tab', function() {
         loadNotes();
     });
+    
+    // Initial load of questions tab
+    loadNotes();
 });
 </script>
 {% endblock %}

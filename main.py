@@ -1,6 +1,6 @@
 import logging
 import os
-import datetime
+from datetime import datetime, timedelta
 import uuid
 import traceback  # For enhanced error reporting
 import requests  # For API calls and error handling
@@ -72,7 +72,7 @@ def oauth_callback():
     """Route to handle Google OAuth callback at root level"""
     # Log detailed information about the callback for debugging
     logger.info(f"==== ROOT LEVEL CALLBACK RECEIVED ====")
-    logger.info(f"Timestamp: {datetime.datetime.now().isoformat()}")
+    logger.info(f"Timestamp: {datetime.now().isoformat()}")
     logger.info(f"Full callback URL: {request.url}")
     logger.info(f"HTTP Method: {request.method}")
     logger.info(f"Query parameters: {request.args}")
@@ -2809,6 +2809,238 @@ def document_questions(document_id):
         questions=questions,
         user_settings=user_settings
     )
+
+# API endpoints for notes and questions
+@app.route('/document/<int:document_id>/notes')
+@login_required
+def get_document_notes(document_id):
+    """
+    Get notes for a document (API)
+    """
+    try:
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check - only allow access to the document owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to access this document'}), 403
+        
+        notes = UserNote.query.filter_by(document_id=document_id, user_id=current_user_id).order_by(UserNote.updated_at.desc()).all()
+        
+        return jsonify({
+            'success': True,
+            'notes': [note.to_dict() for note in notes]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting notes: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/document/<int:document_id>/note', methods=['POST'])
+@login_required
+def save_document_note(document_id):
+    """
+    Save a note for a document (API)
+    """
+    try:
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check - only allow access to the document owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to access this document'}), 403
+        
+        # Get data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+            
+        title = data.get('title', 'Untitled Note')
+        content = data.get('content', '')
+        
+        # Create new note
+        note = UserNote(
+            document_id=document_id,
+            user_id=current_user_id,
+            title=title,
+            content=content,
+            language=document.language  # Use the document language by default
+        )
+        
+        db.session.add(note)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'note': note.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error saving note: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/document/note/<int:note_id>')
+@login_required
+def get_single_note(note_id):
+    """
+    Get a specific note (API)
+    """
+    try:
+        note = UserNote.query.get_or_404(note_id)
+        
+        # Security check - only allow access to the note owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if note.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to access this note'}), 403
+        
+        return jsonify({
+            'success': True,
+            'note': note.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting note: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/document/note/<int:note_id>/update', methods=['POST'])
+@login_required
+def update_document_note(note_id):
+    """
+    Update a note (API)
+    """
+    try:
+        note = UserNote.query.get_or_404(note_id)
+        
+        # Security check - only allow access to the note owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if note.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to update this note'}), 403
+        
+        # Get data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+            
+        title = data.get('title')
+        content = data.get('content')
+        
+        if title:
+            note.title = title
+        if content:
+            note.content = content
+            
+        note.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'note': note.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating note: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/document/note/<int:note_id>/delete', methods=['POST'])
+@login_required
+def delete_document_note(note_id):
+    """
+    Delete a note (API)
+    """
+    try:
+        note = UserNote.query.get_or_404(note_id)
+        
+        # Security check - only allow access to the note owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if note.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to delete this note'}), 403
+        
+        db.session.delete(note)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting note: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/document/question/<int:question_id>/update', methods=['POST'])
+@login_required
+def update_question_answer(question_id):
+    """
+    Update a question's answer (API)
+    """
+    try:
+        question = DocumentQuestion.query.get_or_404(question_id)
+        document = Document.query.get(question.document_id)
+        
+        # Security check - only allow access to the document owner
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            return jsonify({'success': False, 'error': 'You do not have permission to modify this document'}), 403
+        
+        # Get data from request
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+            
+        answer_text = data.get('answer_text')
+        
+        if answer_text:
+            question.answer_text = answer_text
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'question': {
+                    'id': question.id,
+                    'question_text': question.question_text,
+                    'answer_text': question.answer_text,
+                    'is_extracted': question.is_extracted
+                }
+            })
+        else:
+            return jsonify({'success': False, 'error': 'No answer text provided'}), 400
+        
+    except Exception as e:
+        logger.error(f"Error updating question answer: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Dashboard route to view upload history
 @app.route('/dashboard')
