@@ -11,7 +11,20 @@ from gtts import gTTS
 from models import db, Document, UserSettings
 
 # Set up logging for debugging
-logging.basicConfig(level=logging.DEBUG)
+log_file_path = os.path.join('logs', 'app.log')
+os.makedirs('logs', exist_ok=True)
+
+# Configure logging with file and console handlers
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+    handlers=[
+        # File handler for persistent logs
+        logging.FileHandler(log_file_path),
+        # Stream handler for console output
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Create Flask app instance
@@ -50,32 +63,106 @@ def extract_text_from_pdf(file_path):
     """Extract text from PDF file using PyMuPDF"""
     try:
         text = ""
-        # Open the PDF file
-        pdf_document = fitz.open(file_path)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.error(f"PDF file not found: {file_path}")
+            return None, "PDF file not found. Please upload the file again."
+        
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            logger.error(f"PDF file is empty: {file_path}")
+            return None, "The uploaded PDF file is empty."
+            
+        # Try to open the PDF file
+        try:
+            pdf_document = fitz.open(file_path)
+        except Exception as open_error:
+            logger.error(f"Failed to open PDF file: {open_error}")
+            return None, "The PDF file appears to be corrupted or in an unsupported format."
+            
+        # If PDF has no pages
+        if len(pdf_document) == 0:
+            pdf_document.close()
+            logger.warning(f"PDF has no pages: {file_path}")
+            return None, "The PDF file doesn't contain any pages."
+            
         # Iterate through each page and extract text
-        for page_num in range(len(pdf_document)):
-            page = pdf_document[page_num]
-            text += page.get_text()
+        try:
+            for page_num in range(len(pdf_document)):
+                page = pdf_document[page_num]
+                page_text = page.get_text()
+                text += page_text
+        except Exception as read_error:
+            pdf_document.close()
+            logger.error(f"Error reading PDF content: {read_error}")
+            return None, "Failed to extract text from the PDF. It may be encrypted, damaged, or contain unsupported content."
+        
+        # Close the document
         pdf_document.close()
-        return text
+        
+        # Check if we got any text
+        if not text or len(text.strip()) == 0:
+            logger.warning(f"No text extracted from PDF: {file_path}")
+            return None, "No readable text found in the PDF file. It may contain only images or be password protected."
+            
+        return text, None
+        
     except Exception as e:
-        logger.error(f"Error extracting text from PDF: {e}")
-        raise
+        logger.exception(f"Unexpected error extracting text from PDF: {e}")
+        return None, f"Error processing PDF file: {str(e)}"
 
 # Helper function to extract text from DOCX files
 def extract_text_from_docx(file_path):
     """Extract text from DOCX file using python-docx"""
     try:
         text = ""
-        # Open the DOCX file
-        doc = docx.Document(file_path)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.error(f"DOCX file not found: {file_path}")
+            return None, "DOCX file not found. Please upload the file again."
+            
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            logger.error(f"DOCX file is empty: {file_path}")
+            return None, "The uploaded DOCX file is empty."
+        
+        # Try to open the DOCX file
+        try:
+            doc = docx.Document(file_path)
+        except Exception as open_error:
+            logger.error(f"Failed to open DOCX file: {open_error}")
+            return None, "The DOCX file appears to be corrupted or in an unsupported format."
+        
         # Iterate through each paragraph and extract text
-        for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
-        return text
+        try:
+            for paragraph in doc.paragraphs:
+                text += paragraph.text + "\n"
+                
+            # If document has tables, process those too
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text += cell.text + " "
+                    text += "\n"
+                text += "\n"
+        except Exception as read_error:
+            logger.error(f"Error reading DOCX content: {read_error}")
+            return None, "Failed to extract text from the DOCX. It may contain unsupported content."
+            
+        # Check if we got any text
+        if not text or len(text.strip()) == 0:
+            logger.warning(f"No text extracted from DOCX: {file_path}")
+            return None, "No readable text found in the DOCX file."
+            
+        return text, None
+        
     except Exception as e:
-        logger.error(f"Error extracting text from DOCX: {e}")
-        raise
+        logger.exception(f"Unexpected error extracting text from DOCX: {e}")
+        return None, f"Error processing DOCX file: {str(e)}"
 
 # Helper function to generate summary from text using OpenAI
 def generate_summary(text):
@@ -696,47 +783,158 @@ def settings():
     )
 
 # Error handling
-@app.errorhandler(404)
-def not_found_exception_handler(e):
+# Add a route for reporting errors
+@app.route('/report-error', methods=['POST'])
+def report_error():
     """
-    Handle 404 errors
+    Handle error reports from users
     """
-    logger.error(f"URL {request.url} not found")
+    try:
+        error_code = request.form.get('error_code', 'Unknown')
+        error_message = request.form.get('error_message', 'Unknown')
+        user_description = request.form.get('user_description', '')
+        user_email = request.form.get('user_email', '')
+        
+        # Log the error report
+        logger.warning(
+            f"User error report received:\n"
+            f"- Error code: {error_code}\n"
+            f"- Error message: {error_message}\n"
+            f"- User description: {user_description}\n"
+            f"- User email: {user_email}"
+        )
+        
+        # Get user settings
+        user_settings = get_user_settings()
+        
+        # Flash a success message
+        flash('Thank you for reporting the issue. Our team will look into it.', 'success')
+        
+        # Redirect to the homepage
+        return redirect(url_for('home_page'))
+        
+    except Exception as e:
+        logger.error(f"Error processing error report: {e}")
+        return redirect(url_for('home_page'))
+
+# Common function to handle errors
+def handle_error(e, code, message, description=None, show_details=False):
+    """
+    Common function to handle various errors
+    
+    Args:
+        e: The exception
+        code: HTTP status code
+        message: User-friendly message
+        description: Additional descriptive text
+        show_details: Whether to show detailed error info
+    
+    Returns:
+        Rendered error template
+    """
+    error_id = uuid.uuid4().hex[:8]
+    
+    # Log the error with a unique ID for reference
+    logger.error(f"Error ID: {error_id} - Code: {code} - {message} - Details: {str(e)}")
     
     # Get the current user settings if possible
     try:
         user_settings = get_user_settings()
-    except Exception:
+        theme_mode = user_settings.theme_mode
+    except Exception as settings_error:
+        logger.warning(f"Error getting user settings for template: {settings_error}")
         user_settings = None
-        
+        theme_mode = "dark"
+    
+    # Render the error template
     return render_template(
-        "index.html", 
-        title="Page Not Found", 
-        error="404 - Page not found",
+        "error.html",
+        title=f"Error {code}",
+        code=code,
+        message=message,
+        description=description,
+        details=str(e) if e else None,
+        show_details=show_details,
+        theme_mode=theme_mode,
         request=request,
         usage_stats=user_settings
-    ), 404
+    ), code
+
+@app.errorhandler(400)
+def bad_request_error(e):
+    """Handle 400 Bad Request errors"""
+    return handle_error(
+        e, 
+        400, 
+        "Bad Request", 
+        "The server cannot process your request due to invalid syntax or parameters."
+    )
+
+@app.errorhandler(401)
+def unauthorized_error(e):
+    """Handle 401 Unauthorized errors"""
+    return handle_error(
+        e, 
+        401, 
+        "Unauthorized", 
+        "You don't have permission to access this resource."
+    )
+
+@app.errorhandler(403)
+def forbidden_error(e):
+    """Handle 403 Forbidden errors"""
+    return handle_error(
+        e, 
+        403, 
+        "Forbidden", 
+        "You don't have permission to access this resource."
+    )
+
+@app.errorhandler(404)
+def not_found_exception_handler(e):
+    """Handle 404 Not Found errors"""
+    return handle_error(
+        e, 
+        404, 
+        "Page Not Found", 
+        f"The requested URL ({request.path}) was not found on this server."
+    )
+
+@app.errorhandler(413)
+def request_entity_too_large_error(e):
+    """Handle 413 Request Entity Too Large errors"""
+    return handle_error(
+        e, 
+        413, 
+        "File Too Large", 
+        f"The file you're trying to upload is too large. Maximum allowed size is {app.config['MAX_CONTENT_LENGTH'] / (1024 * 1024):.1f} MB."
+    )
 
 @app.errorhandler(500)
 def server_error_handler(e):
-    """
-    Handle 500 errors
-    """
-    logger.error(f"Server error: {e}")
+    """Handle 500 Internal Server Error"""
+    # In production, show detailed error information for debugging
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
     
-    # Get the current user settings if possible
-    try:
-        user_settings = get_user_settings()
-    except Exception:
-        user_settings = None
-        
-    return render_template(
-        "index.html", 
-        title="Server Error", 
-        error="500 - Server error",
-        request=request,
-        usage_stats=user_settings
-    ), 500
+    return handle_error(
+        e, 
+        500, 
+        "Server Error", 
+        "An unexpected error occurred on our servers. Our team has been notified and is working to fix the issue.",
+        show_details=debug_mode
+    )
+
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    """Handle any unhandled exceptions"""
+    logger.exception("Unhandled exception occurred")
+    return handle_error(
+        e, 
+        500, 
+        "Unexpected Error", 
+        "An unexpected error occurred. Our technical team has been notified.",
+        show_details=False
+    )
 
 # Run the application
 if __name__ == "__main__":
