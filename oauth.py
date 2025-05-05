@@ -34,16 +34,35 @@ def login():
     
     # Get the Google OAuth client ID to check if it's configured
     client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
-    if not client_id:
-        current_app.logger.error("Google OAuth client ID not found in environment variables")
-        return redirect(url_for('home_page', error="Google OAuth is not properly configured. Please set the GOOGLE_OAUTH_CLIENT_ID environment variable."))
+    client_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
     
+    if not client_id or not client_secret:
+        current_app.logger.error("Google OAuth credentials not found in environment variables")
+        missing = []
+        if not client_id:
+            missing.append("GOOGLE_OAUTH_CLIENT_ID")
+        if not client_secret:
+            missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
+        return redirect(url_for('home_page', error=f"Google OAuth is not properly configured. Missing: {', '.join(missing)}"))
+    
+    # Log the available callback paths
+    current_app.logger.debug(f"Auth blueprint callback: {url_for('auth.callback', _external=True)}")
+    current_app.logger.debug(f"Root callback: {url_for('oauth_callback', _external=True)}")
+    
+    # For Replit, we need to use the specific format required by Google OAuth
     if replit_domain:
-        # For Replit, use the domain with the /callback path
+        # This is the format Google OAuth expects for Replit
         redirect_uri = f"https://{replit_domain}/callback"
         current_app.logger.info(f"Using Replit redirect URI: {redirect_uri}")
+        
+        # Print to console for easier setup
+        print(f"\n====================== GOOGLE OAUTH SETUP =======================")
+        print(f"To make Google authentication work, add this to your authorized")
+        print(f"redirect URIs in Google Cloud Console:")
+        print(f"{redirect_uri}")
+        print(f"================================================================\n")
     else:
-        # Fallback to default url_for behavior
+        # Fallback to default url_for behavior (for local development)
         redirect_uri = url_for('oauth_callback', _external=True) 
         current_app.logger.info(f"Using standard redirect URI: {redirect_uri}")
     
@@ -63,20 +82,58 @@ def callback():
     try:
         # Detailed logging for debugging
         current_app.logger.info(f"Callback received: {request.url}")
+        current_app.logger.info(f"Callback args: {request.args}")
         
         # Check for error parameter in the callback URL
         if 'error' in request.args:
             error_msg = request.args.get('error')
+            error_description = request.args.get('error_description', 'No description provided')
             current_app.logger.error(f"OAuth error in callback: {error_msg}")
-            return redirect(url_for('home_page', error=f"Google authentication error: {error_msg}"))
+            current_app.logger.error(f"Error description: {error_description}")
+            return redirect(url_for('home_page', error=f"Google authentication error: {error_msg} - {error_description}"))
             
+        # Check for HTTPS - Google OAuth requires HTTPS for the callback
+        if not request.url.startswith('https://') and not request.url.startswith('http://localhost'):
+            current_app.logger.error(f"Callback URL must use HTTPS: {request.url}")
+            current_app.logger.error("If running on Replit, make sure you're using the HTTPS URL.")
+            return redirect(url_for('home_page', error="OAuth error: Callback must use HTTPS. Please use the HTTPS URL for this application."))
+        
+        # Check for state parameter (important for CSRF protection)
+        if 'state' not in request.args:
+            current_app.logger.error("Missing state parameter in callback")
+            return redirect(url_for('home_page', error="OAuth error: Missing state parameter. This may indicate a CSRF attack."))
+        
         # Get the token
         try:
             token = oauth.google.authorize_access_token()
             current_app.logger.info("Token retrieved successfully")
+            # Log token details for debugging (excluding the actual token value for security)
+            if token:
+                token_info = {k: v for k, v in token.items() if k != 'access_token' and k != 'id_token'}
+                current_app.logger.info(f"Token info: {token_info}")
+            else:
+                current_app.logger.warning("Token is empty or None")
         except Exception as token_error:
+            # Log detailed error information
             current_app.logger.error(f"Failed to get token: {str(token_error)}")
-            return redirect(url_for('home_page', error=f"Authentication failed: Could not get token. Make sure the redirect URI is correctly set in Google console: {str(token_error)}"))
+            current_app.logger.error(f"Error type: {type(token_error).__name__}")
+            
+            # Check for specific error types to provide better error messages
+            if hasattr(token_error, 'description'):
+                current_app.logger.error(f"Error description: {token_error.description}")
+            
+            # Extract error message from OAuth error response if available
+            error_details = str(token_error)
+            if hasattr(token_error, 'response') and hasattr(token_error.response, 'json'):
+                try:
+                    error_json = token_error.response.json()
+                    current_app.logger.error(f"OAuth error response: {error_json}")
+                    if 'error_description' in error_json:
+                        error_details = f"{error_json.get('error', 'OAuth Error')}: {error_json.get('error_description')}"
+                except Exception as json_err:
+                    current_app.logger.error(f"Failed to parse error response: {str(json_err)}")
+            
+            return redirect(url_for('home_page', error=f"Authentication failed: Could not get token. Make sure the redirect URI is correctly set in Google console. Error: {error_details}"))
         
         # Get user info from token
         try:

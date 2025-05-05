@@ -66,6 +66,18 @@ app.register_blueprint(auth_bp)
 @app.route('/callback')
 def oauth_callback():
     """Route to handle Google OAuth callback at root level"""
+    # Log detailed information about the callback
+    logger.info(f"Root callback URL received: {request.url}")
+    logger.info(f"Root callback args: {request.args}")
+    logger.info(f"Root callback method: {request.method}")
+    
+    # Check if there's a direct error in the callback
+    if 'error' in request.args:
+        error_msg = request.args.get('error')
+        error_description = request.args.get('error_description', 'No description provided')
+        logger.error(f"OAuth error in root callback: {error_msg} - {error_description}")
+    
+    # Pass to the auth blueprint's handler
     return auth_bp.handle_google_callback()
     
 # This function has been moved to combine with the existing inject_global_variables
