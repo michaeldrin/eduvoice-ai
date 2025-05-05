@@ -1724,7 +1724,8 @@ def document_chat(document_id):
             title=f"Chat with {document.filename}",
             document=document,
             chat_messages=chat_messages,
-            usage_stats=user_settings
+            usage_stats=user_settings,
+            preferred_language=user_settings.language
         )
         
     except Exception as e:

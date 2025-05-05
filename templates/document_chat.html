@@ -182,8 +182,8 @@
     const clearChatButton = document.getElementById('clearChat');
     const languageButtons = document.querySelectorAll('.language-btn');
     
-    // Current language for chat (default to English)
-    let currentChatLanguage = "{{ document.language if document and document.language else 'en' }}";
+    // Current language for chat (user preference > document language > English)
+    let currentChatLanguage = "{{ preferred_language or (document.language if document and document.language else 'en') }}";
     
     // Scroll to bottom of chat container
     function scrollToBottom() {
@@ -192,6 +192,24 @@
     
     // Initialize
     scrollToBottom();
+    
+    // Initialize language dropdown text to show current language
+    const languageMap = {
+      'en': 'English',
+      'es': 'Spanish',
+      'fr': 'French',
+      'de': 'German',
+      'it': 'Italian',
+      'pt': 'Portuguese',
+      'ru': 'Russian',
+      'zh': 'Chinese',
+      'ja': 'Japanese',
+      'ko': 'Korean',
+      'ar': 'Arabic',
+      'hi': 'Hindi'
+    };
+    const dropdownButton = document.getElementById('languageDropdown');
+    dropdownButton.innerHTML = `<i class="bi bi-translate"></i> ${languageMap[currentChatLanguage] || 'Language'}`;
     
     // Add a message to the chat UI
     function addMessageToUI(content, isUser = false) {
@@ -305,22 +323,6 @@
         
         // Update the current language
         currentChatLanguage = selectedLanguage;
-        
-        // Update the dropdown button text to reflect the selected language
-        const languageMap = {
-          'en': 'English',
-          'es': 'Spanish',
-          'fr': 'French',
-          'de': 'German',
-          'it': 'Italian',
-          'pt': 'Portuguese',
-          'ru': 'Russian',
-          'zh': 'Chinese',
-          'ja': 'Japanese',
-          'ko': 'Korean',
-          'ar': 'Arabic',
-          'hi': 'Hindi'
-        };
         
         // Update the dropdown button text
         const dropdownButton = document.getElementById('languageDropdown');
