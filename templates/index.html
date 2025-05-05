@@ -94,6 +94,8 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="/"><i class="bi bi-house-fill me-1"></i> Home</a>
                     </li>
+                    
+                    {% if is_logged_in %}
                     <li class="nav-item">
                         <a class="nav-link" href="/upload"><i class="bi bi-upload me-1"></i> Upload</a>
                     </li>
@@ -104,16 +106,15 @@
                         <a class="nav-link" href="/settings"><i class="bi bi-gear-fill me-1"></i> Settings</a>
                     </li>
                     
-                    {% if is_logged_in %}
                     <!-- User is logged in -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            {% if google_user.picture %}
-                            <img src="{{ google_user.picture }}" alt="Profile" class="rounded-circle me-2" width="24" height="24">
+                            {% if user.picture %}
+                            <img src="{{ user.picture }}" alt="Profile" class="rounded-circle me-2" width="24" height="24">
                             {% else %}
                             <i class="bi bi-person-circle me-2"></i>
                             {% endif %}
-                            {{ google_user.name if google_user.name else google_user.email }}
+                            {{ user.name if user.name else user.email }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                             <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Profile</a></li>
@@ -183,9 +184,6 @@
                         {% else %}
                         <a href="/login" class="btn btn-primary btn-lg get-started-btn">
                             <i class="bi bi-google me-2"></i>Login with Google
-                        </a>
-                        <a href="/upload" class="btn btn-outline-secondary btn-lg">
-                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Continue as Guest
                         </a>
                         {% endif %}
                     </div>

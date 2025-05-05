@@ -491,7 +491,20 @@ def login_required(view_func):
     """Decorator to require login for views"""
     def wrapped_view(*args, **kwargs):
         if 'user' not in session:
-            return redirect(url_for('auth.login'))
+            # Store the requested URL to redirect back after login
+            next_url = request.path
+            current_app.logger.info(f"Unauthorized access to {next_url}, redirecting to login")
+            
+            # Save the path in the session to redirect after login
+            if next_url:
+                session['next_page'] = next_url
+                
+            # Redirect to login page with a message
+            return redirect(url_for('auth.login', next=next_url, message="Please log in to access this page"))
+            
+        # User is logged in, proceed to view
         return view_func(*args, **kwargs)
+        
+    # Preserve function name for Flask's routing
     wrapped_view.__name__ = view_func.__name__
     return wrapped_view
