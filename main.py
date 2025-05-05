@@ -661,63 +661,110 @@ def auto_process_document(document):
     Returns:
         bool: True if processing was successful, False otherwise
     """
+    processing_success = False
     try:
-        if not document or not document.text_content:
-            logger.error(f"Cannot auto-process document: no document or text content")
+        # Input validation
+        if not document:
+            logger.error("Cannot auto-process: document is None")
             return False
             
+        if not document.text_content:
+            logger.error(f"Cannot auto-process document {document.id}: no text content")
+            # Make sure the document shows as processed even if there's no content
+            # This prevents repeated processing attempts for empty documents
+            try:
+                document.auto_processed = True
+                db.session.commit()
+            except Exception as db_error:
+                logger.exception(f"Database error while flagging empty document as processed: {db_error}")
+                db.session.rollback()
+            return False
+            
+        # Start auto-processing
         logger.info(f"Starting auto-processing for document {document.id}: {document.filename}")
         
         # Generate summary if not already done
         if not document.summary:
-            logger.info(f"Generating summary for document {document.id}")
-            summary, error = generate_summary(document.text_content)
-            if error or not summary:
-                logger.error(f"Failed to generate summary: {error}")
-                return False
-                
-            document.summary = summary
+            try:
+                logger.info(f"Generating summary for document {document.id}")
+                summary, error = generate_summary(document.text_content)
+                if error or not summary:
+                    logger.error(f"Failed to generate summary: {error}")
+                    # Continue with partial processing
+                else:
+                    document.summary = summary
+                    
+                    # Save summary to a text file with error handling
+                    try:
+                        summaries_dir = os.path.join('static', 'summaries')
+                        os.makedirs(summaries_dir, exist_ok=True)
+                        
+                        summary_filename = f"summary_{uuid.uuid4().hex[:8]}.txt"
+                        summary_path = os.path.join(summaries_dir, summary_filename)
+                        
+                        with open(summary_path, 'w', encoding='utf-8') as summary_file:
+                            if summary:  # Extra check to prevent None errors
+                                summary_file.write(summary)
+                            
+                        document.text_filename = summary_filename
+                        db.session.commit()  # Save progress incrementally
+                        logger.info(f"Summary file created: {summary_filename}")
+                    except Exception as file_error:
+                        logger.exception(f"Error saving summary file: {file_error}")
+                        # Continue with partial processing
+            except Exception as summary_error:
+                logger.exception(f"Error during summary generation: {summary_error}")
+                # Continue with partial processing
             
-            # Save summary to a text file
-            summaries_dir = os.path.join('static', 'summaries')
-            os.makedirs(summaries_dir, exist_ok=True)
-            
-            summary_filename = f"summary_{uuid.uuid4().hex}.txt"
-            summary_path = os.path.join(summaries_dir, summary_filename)
-            
-            with open(summary_path, 'w', encoding='utf-8') as summary_file:
-                summary_file.write(summary)
-                
-            document.text_filename = summary_filename
-            logger.info(f"Summary file created: {summary_filename}")
-            
-        # Generate audio if not already done
-        if not document.audio_filename:
-            logger.info(f"Generating audio for document {document.id}")
-            audio_filename, error = text_to_speech(document.summary)
-            if error or not audio_filename:
-                logger.error(f"Failed to generate audio: {error}")
-                # Continue processing even if audio fails
-            else:
-                document.audio_filename = audio_filename
-                logger.info(f"Audio file created: {audio_filename}")
+        # Generate audio if not already done and if we have a summary
+        if document.summary and not document.audio_filename:
+            try:
+                logger.info(f"Generating audio for document {document.id}")
+                audio_filename, error = text_to_speech(document.summary)
+                if error or not audio_filename:
+                    logger.error(f"Failed to generate audio: {error}")
+                    # Continue processing even if audio fails
+                else:
+                    document.audio_filename = audio_filename
+                    db.session.commit()  # Save progress incrementally
+                    logger.info(f"Audio file created: {audio_filename}")
+            except Exception as audio_error:
+                logger.exception(f"Error during audio generation: {audio_error}")
+                # Continue with partial processing
         
         # Generate initial chat message
-        logger.info(f"Generating initial chat message for document {document.id}")
-        welcome_message = generate_initial_chat_message(document)
-        if not welcome_message:
-            logger.warning(f"Failed to generate welcome message for document {document.id}")
-            # Continue processing even if welcome message fails
+        try:
+            logger.info(f"Generating initial chat message for document {document.id}")
+            welcome_message = generate_initial_chat_message(document)
+            if not welcome_message:
+                logger.warning(f"Failed to generate welcome message for document {document.id}")
+                # Continue processing even if welcome message fails
+        except Exception as chat_error:
+            logger.exception(f"Error generating initial chat message: {chat_error}")
+            # Continue with partial processing
             
-        # Mark document as auto-processed
-        document.auto_processed = True
-        db.session.commit()
-        logger.info(f"Auto-processing complete for document {document.id}")
-        return True
+        # Mark document as auto-processed regardless of partial failures
+        try:
+            document.auto_processed = True
+            db.session.commit()
+            logger.info(f"Auto-processing complete for document {document.id}")
+            processing_success = True
+        except Exception as db_error:
+            logger.exception(f"Database error while finalizing auto-processing: {db_error}")
+            db.session.rollback()
+            
+        return processing_success
         
     except Exception as e:
-        logger.exception(f"Error during auto-processing of document: {e}")
-        return False
+        logger.exception(f"Unhandled exception during auto-processing of document: {e}")
+        try:
+            # Still try to mark as processed to prevent repeated processing attempts
+            if document:
+                document.auto_processed = True
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return processing_success
 
 # Helper function to convert text to speech using gTTS
 def text_to_speech(text, filename=None):
