@@ -51,6 +51,9 @@
                             <p class="text-muted">Customize your document processing experience</p>
                         </div>
                         
+                        <!-- Include usage stats component -->
+                        {% include 'usage_stats.html' %}
+                        
                         {% if success %}
                         <div class="alert alert-success alert-dismissible fade show" role="alert">
                             <i class="bi bi-check-circle-fill me-2"></i> {{ success }}

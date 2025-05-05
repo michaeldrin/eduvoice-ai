@@ -244,10 +244,15 @@ def home_page():
     Homepage route that returns a welcome message using Jinja2 template
     """
     logger.debug("Accessing homepage route")
+    
+    # Get the current user settings
+    user_settings = get_user_settings()
+    
     return render_template(
         "index.html", 
-        title="Flask with Jinja2",
-        request=request
+        title="Document Processor",
+        request=request,
+        usage_stats=user_settings
     )
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -255,8 +260,21 @@ def upload_file():
     """
     Route to handle file uploads
     """
+    # Get the current user settings
+    user_settings = get_user_settings()
+    
     if request.method == 'POST':
         logger.debug("Processing file upload")
+        
+        # Check if user has reached daily upload limit
+        if not user_settings.can_upload_file():
+            logger.warning(f"User {user_settings.session_id} has reached daily upload limit")
+            return render_template(
+                "upload.html", 
+                title="File Upload",
+                error="You've reached your daily upload limit (5 files per day). Please try again tomorrow or upgrade your account.",
+                usage_stats=user_settings
+            )
         
         # Check if the post request has the file part
         if 'file' not in request.files:
@@ -264,7 +282,8 @@ def upload_file():
             return render_template(
                 "upload.html", 
                 title="File Upload",
-                error="No file selected"
+                error="No file selected",
+                usage_stats=user_settings
             )
             
         file = request.files['file']
@@ -276,13 +295,19 @@ def upload_file():
             return render_template(
                 "upload.html", 
                 title="File Upload",
-                error="No file selected"
+                error="No file selected",
+                usage_stats=user_settings
             )
             
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
+            
+            # Increment the file upload counter
+            user_settings.increment_file_uploads()
+            db.session.commit()
+            logger.info(f"Incremented file uploads for user {user_settings.session_id}: {user_settings.files_uploaded}")
             
             # Get file details
             file_size = os.path.getsize(file_path)
@@ -304,7 +329,8 @@ def upload_file():
                     return render_template(
                         "upload.html",
                         title="File Upload",
-                        error=f"Cannot extract text from {file_type.upper()} files"
+                        error=f"Cannot extract text from {file_type.upper()} files",
+                        usage_stats=user_settings
                     )
                 
                 # Get the total length of extracted text
@@ -324,7 +350,8 @@ def upload_file():
                     filetype=file_type.upper(),
                     extracted_text=extracted_text,
                     total_length=total_length,
-                    truncated=truncated
+                    truncated=truncated,
+                    usage_stats=user_settings
                 )
                 
             except Exception as e:
@@ -332,20 +359,23 @@ def upload_file():
                 return render_template(
                     "upload.html",
                     title="File Upload",
-                    error=f"Error extracting text: {str(e)}"
+                    error=f"Error extracting text: {str(e)}",
+                    usage_stats=user_settings
                 )
         else:
             logger.error("Invalid file type")
             return render_template(
                 "upload.html", 
                 title="File Upload",
-                error="Only PDF and DOCX files are allowed"
+                error="Only PDF and DOCX files are allowed",
+                usage_stats=user_settings
             )
     
     # GET request - show upload form
     return render_template(
         "upload.html", 
-        title="File Upload"
+        title="File Upload",
+        usage_stats=user_settings
     )
 
 # Route for text summarization using OpenAI
@@ -355,6 +385,9 @@ def summarize_text():
     Route to handle text summarization requests
     """
     logger.debug("Processing summarization request")
+    
+    # Get the current user settings
+    user_settings = get_user_settings()
     
     # Get form data
     filename = request.form.get('filename', 'Unknown File')
@@ -374,7 +407,23 @@ def summarize_text():
         return render_template(
             "upload.html",
             title="File Upload",
-            error="No text to summarize. Please upload a file with content."
+            error="No text to summarize. Please upload a file with content.",
+            usage_stats=user_settings
+        )
+    
+    # Check if user has reached summary generation limit
+    if not user_settings.can_generate_summary():
+        logger.warning(f"User {user_settings.session_id} has reached summary generation limit")
+        return render_template(
+            "preview.html",
+            title="Text Preview",
+            filename=filename,
+            filetype=filetype,
+            extracted_text=extracted_text,
+            total_length=total_length,
+            truncated=truncated,
+            error="You've reached your summary generation limit (10 summaries total). Please upgrade your account for more.",
+            usage_stats=user_settings
         )
     
     # Generate summary
@@ -390,8 +439,14 @@ def summarize_text():
             extracted_text=extracted_text,
             total_length=total_length,
             truncated=truncated,
-            error=f"Failed to generate summary: {error}"
+            error=f"Failed to generate summary: {error}",
+            usage_stats=user_settings
         )
+    
+    # Increment summary counter
+    user_settings.increment_summaries()
+    db.session.commit()
+    logger.info(f"Incremented summaries for user {user_settings.session_id}: {user_settings.summaries_generated}")
     
     # Generate a unique file identifier for summary text and audio files
     base_filename = os.path.splitext(filename)[0]
@@ -417,20 +472,34 @@ def summarize_text():
         logger.error(f"Error creating summary text file: {e}")
         text_filename = None
     
-    # Generate audio from the summary text
+    # Generate audio from the summary text - if within limits
     audio_file = None
     audio_error = None
     
     if summary:
-        # Use the same base filename for audio to match the text file
-        safe_audio_filename = f"{safe_base_filename}"
+        # Estimate audio duration in minutes (average speaking rate is about 150 words per minute)
+        # Split by spaces to count words, multiply by 60 seconds, divide by 150 words per minute
+        estimated_audio_minutes = len(summary.split()) / 150
         
-        # Convert the summary to speech
-        audio_file, audio_error = text_to_speech(summary, safe_audio_filename)
-        
-        if audio_error:
-            logger.error(f"Error in text-to-speech conversion: {audio_error}")
-            # We'll continue without audio if there's an error, but we'll include the error message
+        # Check if user has audio minutes left
+        if user_settings.can_generate_audio(estimated_audio_minutes):
+            # Use the same base filename for audio to match the text file
+            safe_audio_filename = f"{safe_base_filename}"
+            
+            # Convert the summary to speech
+            audio_file, audio_error = text_to_speech(summary, safe_audio_filename)
+            
+            if audio_error:
+                logger.error(f"Error in text-to-speech conversion: {audio_error}")
+                # We'll continue without audio if there's an error, but we'll include the error message
+            else:
+                # Add the estimated audio minutes to the user's total
+                user_settings.add_audio_minutes(estimated_audio_minutes)
+                db.session.commit()
+                logger.info(f"Added {estimated_audio_minutes:.2f} audio minutes for user {user_settings.session_id}: {user_settings.audio_minutes:.2f}")
+        else:
+            audio_error = "You've reached your audio generation limit (15 minutes total). Please upgrade your account for more."
+            logger.warning(f"User {user_settings.session_id} has reached audio generation limit")
     
     # Save to database
     try:
@@ -461,7 +530,8 @@ def summarize_text():
         summary=summary,
         audio_file=audio_file,
         audio_error=audio_error,
-        text_filename=text_filename
+        text_filename=text_filename,
+        usage_stats=user_settings
     )
 
 # Add global template variables
@@ -532,6 +602,9 @@ def dashboard():
     """
     logger.debug("Accessing dashboard route")
     
+    # Get the current user settings
+    user_settings = get_user_settings()
+    
     try:
         # Query all documents from the database, ordered by upload time (newest first)
         documents = Document.query.order_by(Document.upload_time.desc()).all()
@@ -540,7 +613,8 @@ def dashboard():
         return render_template(
             "dashboard.html",
             title="Upload History Dashboard",
-            documents=documents
+            documents=documents,
+            usage_stats=user_settings
         )
     except Exception as e:
         logger.error(f"Error accessing dashboard: {e}")
@@ -548,7 +622,8 @@ def dashboard():
             "index.html",
             title="Error",
             error=f"Could not load dashboard: {str(e)}",
-            request=request
+            request=request,
+            usage_stats=user_settings
         )
 
 # Settings route to customize user preferences
@@ -616,7 +691,8 @@ def settings():
         voice_speeds=voice_speeds,
         theme_modes=theme_modes,
         success=success_message,
-        error=error_message
+        error=error_message,
+        usage_stats=user_settings
     )
 
 # Error handling
@@ -626,11 +702,19 @@ def not_found_exception_handler(e):
     Handle 404 errors
     """
     logger.error(f"URL {request.url} not found")
+    
+    # Get the current user settings if possible
+    try:
+        user_settings = get_user_settings()
+    except Exception:
+        user_settings = None
+        
     return render_template(
         "index.html", 
         title="Page Not Found", 
         error="404 - Page not found",
-        request=request
+        request=request,
+        usage_stats=user_settings
     ), 404
 
 @app.errorhandler(500)
@@ -639,11 +723,19 @@ def server_error_handler(e):
     Handle 500 errors
     """
     logger.error(f"Server error: {e}")
+    
+    # Get the current user settings if possible
+    try:
+        user_settings = get_user_settings()
+    except Exception:
+        user_settings = None
+        
     return render_template(
         "index.html", 
         title="Server Error", 
         error="500 - Server error",
-        request=request
+        request=request,
+        usage_stats=user_settings
     ), 500
 
 # Run the application
