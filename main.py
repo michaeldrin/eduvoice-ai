@@ -1367,8 +1367,11 @@ def summarize_text():
             usage_stats=user_settings
         )
     
-    # Generate summary
-    summary, error = generate_summary(extracted_text)
+    # Get the selected language for summary
+    summary_language = request.form.get('summary_language', user_settings.language)
+    
+    # Generate summary in selected language
+    summary, error = generate_summary(extracted_text, summary_language)
     
     if error:
         logger.error(f"Error in summarization: {error}")
@@ -1463,7 +1466,7 @@ def summarize_text():
             text_filename=text_filename,
             audio_filename=audio_file,
             upload_time=datetime.datetime.now(),
-            language=language,  # Set the document language from form
+            language=summary_language,  # Use the selected summary language
             auto_processed=True  # Mark as processed since we're doing it here
         )
         db.session.add(document)
