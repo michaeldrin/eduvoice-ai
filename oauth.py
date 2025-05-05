@@ -27,16 +27,39 @@ def init_oauth(app):
             missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
         app.logger.error(f"Missing OAuth credentials: {', '.join(missing)}")
     
-    # Log the domain used for Replit
-    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN') 
+    # Determine the correct Replit domain for callbacks
+    replit_domain = None
+    
+    # Check for Replit domain in different environment variables
+    # REPLIT_DEV_DOMAIN is used in the Dev environment
+    if os.environ.get('REPLIT_DEV_DOMAIN'):
+        replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+        app.logger.info(f"Detected Replit dev domain: {replit_domain}")
+    # REPL_SLUG and REPL_OWNER are used in the production environment
+    elif os.environ.get('REPL_SLUG') and os.environ.get('REPL_OWNER'):
+        repl_slug = os.environ.get('REPL_SLUG')
+        repl_owner = os.environ.get('REPL_OWNER')
+        replit_domain = f"{repl_owner}.{repl_slug}.repl.co"
+        app.logger.info(f"Constructed Replit production domain: {replit_domain}")
+    
     if replit_domain:
-        app.logger.info(f"Detected Replit environment with domain: {replit_domain}")
+        # Format the callback URL and save it in the app config for consistent use
+        app.config['OAUTH_REDIRECT_URI'] = f"https://{replit_domain}/callback"
+        
         # Print clear instructions for the redirect URI setup
         print(f"\n====================== GOOGLE OAUTH SETUP =======================")
-        print(f"To make Google authentication work, add this EXACT URI to your")
-        print(f"authorized redirect URIs in Google Cloud Console:")
-        print(f"https://{replit_domain}/callback")
+        print(f"IMPORTANT: Add this EXACT URI to 'Authorized redirect URIs'")
+        print(f"in Google Cloud Console (OAuth 2.0 Client IDs section):")
+        print(f"")
+        print(f"{app.config['OAUTH_REDIRECT_URI']}")
+        print(f"")
+        print(f"The 'redirect_uri_mismatch' error means this URI doesn't exactly match")
+        print(f"what's configured in your Google Cloud Console.")
         print(f"================================================================\n")
+    else:
+        app.logger.warning("Could not determine Replit domain. OAuth may not work correctly.")
+        # For local development fallback
+        app.config['OAUTH_REDIRECT_URI'] = None
     
     # Register the Google OAuth provider with explicit parameters
     oauth.register(
@@ -68,40 +91,55 @@ def login():
             missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
         return redirect(url_for('home_page', error=f"Google OAuth is not properly configured. Missing: {', '.join(missing)}"))
     
-    # Determine the correct callback URL based on environment
-    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+    # Get the pre-configured redirect URI from app config
+    redirect_uri = current_app.config.get('OAUTH_REDIRECT_URI')
     
-    # For Replit, construct the callback URL using the REPLIT_DEV_DOMAIN
-    if replit_domain:
-        # This must exactly match what's in your Google Cloud Console
-        redirect_uri = f"https://{replit_domain}/callback"
+    if not redirect_uri:
+        # If not found in config, determine it from environment variables
+        replit_domain = None
         
-        # Log the exact URI for debugging purposes
-        current_app.logger.info(f"Using Replit callback URI: {redirect_uri}")
-        current_app.logger.info("If login fails with 403 error, verify this exact URI is added to Google Cloud Console")
-        
-        # Print instructions to console to make it very clear
-        print(f"\n====================== GOOGLE OAUTH SETUP =======================")
-        print(f"IMPORTANT: Add this exact URI to your Google Cloud Console")
-        print(f"(OAuth 2.0 Client IDs → Authorized redirect URIs):")
-        print(f"")
-        print(f"{redirect_uri}")
-        print(f"")
-        print(f"If you continue to experience 403 errors:")
-        print(f"1. Ensure there are no extra spaces or characters in the URI")
-        print(f"2. If your app is in 'Testing' mode, add your email to test users")
-        print(f"3. Make sure Google+ API or People API is enabled")
-        print(f"================================================================\n")
-    else:
-        # For local development - though this won't work for Google OAuth typically
-        redirect_uri = url_for('oauth_callback', _external=True, _scheme='https')
-        current_app.logger.info(f"Using local development redirect URI: {redirect_uri}")
+        # Check Replit dev environment
+        if os.environ.get('REPLIT_DEV_DOMAIN'):
+            replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+            current_app.logger.info(f"Using Replit dev domain: {replit_domain}")
+        # Check Replit production environment
+        elif os.environ.get('REPL_SLUG') and os.environ.get('REPL_OWNER'):
+            repl_slug = os.environ.get('REPL_SLUG')
+            repl_owner = os.environ.get('REPL_OWNER')
+            replit_domain = f"{repl_owner}.{repl_slug}.repl.co"
+            current_app.logger.info(f"Using Replit production domain: {replit_domain}")
+            
+        if replit_domain:
+            redirect_uri = f"https://{replit_domain}/callback"
+        else:
+            # Local development fallback
+            redirect_uri = url_for('oauth_callback', _external=True, _scheme='https')
+            current_app.logger.warning("Could not determine Replit domain, using fallback URI")
+    
+    # Log the final redirect URI for debugging
+    current_app.logger.info(f"Using OAuth redirect URI: {redirect_uri}")
+    
+    # Print instructions to console (always do this for clarity)
+    print(f"\n====================== GOOGLE OAUTH SETUP =======================")
+    print(f"IMPORTANT: Add this EXACT redirect URI to Google Cloud Console:")
+    print(f"{redirect_uri}")
+    print(f"")
+    print(f"If you receive 'redirect_uri_mismatch' errors:")
+    print(f"1. Copy the exact URI above (no extra spaces or characters)")
+    print(f"2. In Google Cloud Console → API & Services → Credentials")
+    print(f"3. Edit your OAuth 2.0 Client ID")
+    print(f"4. Paste it in 'Authorized redirect URIs' section")
+    print(f"5. Save the changes")
+    print(f"================================================================\n")
     
     try:
-        # Save the redirect URI used in the session for verification during callback
+        # Store redirect URI in session for validation during callback
         session['oauth_redirect_uri'] = redirect_uri
         
-        # Include explicit parameters for more reliable OAuth flow
+        # Log parameters for debugging
+        current_app.logger.info(f"Starting OAuth flow with redirect_uri={redirect_uri}")
+        
+        # Initiate the OAuth flow with explicit parameters
         return oauth.google.authorize_redirect(
             redirect_uri=redirect_uri,
             prompt='select_account'  # Always show account selector
@@ -150,8 +188,42 @@ def callback():
             
             return redirect(url_for('home_page', error=f"Google authentication error: {error_msg} - {error_description}"))
             
-        # Validate HTTPS (Google OAuth requires HTTPS)
-        if not request.url.startswith('https://') and not request.url.startswith('http://localhost'):
+        # Special handling for HTTP callbacks on Replit - force HTTPS for the authorization
+        # This works around a common issue where the callback comes to http:// but
+        # Google OAuth requires https:// registered callbacks
+        replit_domain = None
+        if os.environ.get('REPLIT_DEV_DOMAIN'):
+            replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+        elif os.environ.get('REPL_SLUG') and os.environ.get('REPL_OWNER'):
+            repl_slug = os.environ.get('REPL_SLUG')
+            repl_owner = os.environ.get('REPL_OWNER')
+            replit_domain = f"{repl_owner}.{repl_slug}.repl.co"
+        
+        if replit_domain and request.url.startswith(f"http://{replit_domain}"):
+            # If we received HTTP but need HTTPS, construct the HTTPS URL
+            current_app.logger.warning(f"Received HTTP callback - redirecting to HTTPS: {request.url}")
+            
+            # Extract the path, query string, and fragment
+            from urllib.parse import urlparse, parse_qsl, urlencode
+            parsed = urlparse(request.url)
+            path = parsed.path
+            
+            # Reconstruct with HTTPS
+            https_url = f"https://{replit_domain}{path}"
+            
+            # Add query parameters if present
+            if parsed.query:
+                query_params = dict(parse_qsl(parsed.query))
+                https_url = f"{https_url}?{urlencode(query_params)}"
+                
+            # Log the redirection
+            current_app.logger.info(f"Redirecting to HTTPS URL: {https_url}")
+            
+            # Redirect to the HTTPS version
+            return redirect(https_url)
+            
+        # For non-Replit environments, validate HTTPS normally
+        elif not request.url.startswith('https://') and not request.url.startswith('http://localhost'):
             current_app.logger.error(f"Non-HTTPS callback URL: {request.url}")
             return redirect(url_for('home_page', error="OAuth error: HTTPS is required. Please use the secure URL."))
         
@@ -159,6 +231,13 @@ def callback():
         if 'state' not in request.args:
             current_app.logger.error("Missing state parameter in callback - potential CSRF attack")
             return redirect(url_for('home_page', error="OAuth error: Missing state parameter. This may indicate a security issue."))
+        
+        # Verify the redirect URI from session matches what we expect
+        expected_redirect_uri = session.get('oauth_redirect_uri')
+        if expected_redirect_uri:
+            current_app.logger.info(f"Verifying against expected redirect URI: {expected_redirect_uri}")
+        else:
+            current_app.logger.warning("No expected redirect URI found in session. This could cause problems.")
         
         # Get the token with enhanced error handling
         try:
@@ -254,21 +333,71 @@ def callback():
             return redirect(url_for('home_page', error=f"Authentication failed: Could not get user info: {str(userinfo_error)}"))
         
         if user_info and 'email' in user_info:
-            # Store user info in session
+            # Get user information from the response
+            user_email = user_info.get('email')
+            user_name = user_info.get('name', user_email)
+            user_id = user_info.get('sub')
+            user_picture = user_info.get('picture', '')
+            
+            # Log full user information for debugging (except any sensitive data)
+            current_app.logger.info(f"User authenticated successfully:")
+            current_app.logger.info(f"- Email: {user_email}")
+            current_app.logger.info(f"- Name: {user_name}")
+            current_app.logger.info(f"- Google ID: {user_id}")
+            current_app.logger.info(f"- Has picture: {'Yes' if user_picture else 'No'}")
+            
+            # Store user info in session with additional fields for verification
             session['user'] = {
-                'id': user_info.get('sub'),
-                'email': user_info.get('email'),
-                'name': user_info.get('name', user_info.get('email')),
-                'picture': user_info.get('picture', ''),
-                'logged_in_at': datetime.datetime.now().isoformat()
+                'id': user_id,
+                'email': user_email,
+                'name': user_name,
+                'picture': user_picture,
+                'logged_in_at': datetime.datetime.now().isoformat(),
+                'auth_provider': 'google'
             }
             
-            current_app.logger.info(f"User logged in successfully: {user_info.get('email')}")
+            # Log successful session storage
+            current_app.logger.info(f"User session created successfully for: {user_email}")
+            
+            # Create/update user in database if needed
+            try:
+                from models import db, UserSettings
+                
+                # Find or create user settings 
+                user_settings = UserSettings.query.filter_by(session_id=user_email).first()
+                if not user_settings:
+                    user_settings = UserSettings(session_id=user_email)
+                    db.session.add(user_settings)
+                    db.session.commit()
+                    current_app.logger.info(f"Created new user settings for: {user_email}")
+                else:
+                    current_app.logger.info(f"Found existing user settings for: {user_email}")
+            except Exception as db_error:
+                current_app.logger.error(f"Database error when storing user: {str(db_error)}")
+                # Continue with login flow even if database storage fails
+            
             # Include success message in the redirect
-            return redirect(url_for('home_page', message=f"Welcome, {user_info.get('name', user_info.get('email'))}!"))
+            return redirect(url_for('home_page', message=f"Welcome, {user_name}!"))
         else:
-            current_app.logger.error(f"Failed to get valid user info: {user_info}")
-            return redirect(url_for('home_page', error="Failed to get user info. Please try again."))
+            # Log specific issues with the user info
+            missing_fields = []
+            if not user_info:
+                current_app.logger.error("Empty user info response from Google")
+                missing_fields.append("all user information")
+            else:
+                if 'email' not in user_info:
+                    current_app.logger.error("Missing email in Google user info")
+                    missing_fields.append("email")
+                if 'name' not in user_info:
+                    current_app.logger.warning("Missing name in Google user info")
+                    missing_fields.append("name")
+                if 'sub' not in user_info:
+                    current_app.logger.warning("Missing sub (user ID) in Google user info")
+                    missing_fields.append("user ID")
+                
+                current_app.logger.error(f"Invalid user info response: {user_info}")
+                
+            return redirect(url_for('home_page', error=f"Failed to get valid user information. Missing: {', '.join(missing_fields)}. Please try again."))
     
     except Exception as e:
         current_app.logger.error(f"Error in OAuth callback: {str(e)}")
