@@ -730,6 +730,12 @@ def inject_global_variables():
     """
     Make common variables available to all templates
     """
+    # Check if user is logged in (from session)
+    is_logged_in = 'user' in session
+    
+    # Get user info if logged in
+    user_info = session.get('user', {}) if is_logged_in else {}
+    
     # Get user settings and make them available in all templates
     try:
         user_settings = get_user_settings()
@@ -835,6 +841,19 @@ def dashboard():
     """
     logger.debug("Accessing dashboard route")
     
+    # Get any message from the URL parameters (e.g., welcome message)
+    message = request.args.get('message')
+    
+    # Clear any potential redirection flags to prevent loops
+    if 'from_callback' in session:
+        session.pop('from_callback', None)
+        logger.info("Cleared 'from_callback' flag in dashboard route")
+    
+    # Log user information for debugging
+    if 'user' in session:
+        user_email = session['user'].get('email', 'unknown')
+        logger.info(f"User {user_email} is viewing the dashboard")
+    
     try:
         # Get the current user settings
         user_settings = get_user_settings()
@@ -848,7 +867,9 @@ def dashboard():
                 "dashboard.html",
                 title="Upload History Dashboard",
                 documents=documents,
-                usage_stats=user_settings
+                usage_stats=user_settings,
+                message=message,
+                user=session.get('user', {})
             )
         except Exception as db_error:
             logger.error(f"Error querying documents: {db_error}")
@@ -857,7 +878,9 @@ def dashboard():
                 title="Upload History Dashboard",
                 error="Could not load documents. Please try again later.",
                 documents=[],
-                usage_stats=user_settings
+                usage_stats=user_settings,
+                message=message,
+                user=session.get('user', {})
             )
     except Exception as e:
         logger.error(f"Error accessing dashboard: {e}")
@@ -866,7 +889,8 @@ def dashboard():
             title="Error",
             error=f"Could not load dashboard: {str(e)}",
             request=request,
-            usage_stats=None
+            usage_stats=None,
+            user=session.get('user', {})
         )
 
 # Settings route to customize user preferences

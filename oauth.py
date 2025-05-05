@@ -78,6 +78,21 @@ def init_oauth(app):
 @auth_bp.route('/login')
 def login():
     """Redirect to Google for OAuth login"""
+    # First, check if user is already logged in
+    if 'user' in session:
+        current_app.logger.info(f"User already logged in: {session['user'].get('email', 'unknown')}")
+        # Track redirection to prevent loops
+        if session.get('from_callback'):
+            # This is a potential infinite loop - reset session and continue to login
+            current_app.logger.warning("Detected potential redirect loop - resetting session")
+            session.pop('from_callback', None)
+        else:
+            # User is already logged in - redirect to dashboard instead of Google login
+            current_app.logger.info("Redirecting logged-in user to dashboard instead of login flow")
+            # Set next parameter to remember where user wanted to go, if provided
+            next_url = request.args.get('next', 'dashboard')
+            return redirect(url_for(next_url))
+    
     # Verify OAuth credentials are available
     client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
     client_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
@@ -118,6 +133,15 @@ def login():
     
     # Log the final redirect URI for debugging
     current_app.logger.info(f"Using OAuth redirect URI: {redirect_uri}")
+    
+    # Store the referring page (if any) so we can redirect back after login
+    next_page = request.args.get('next')
+    if next_page:
+        session['next_page'] = next_page
+        current_app.logger.info(f"Saved next_page in session: {next_page}")
+    
+    # Clear any 'from_callback' flag to prevent loops
+    session.pop('from_callback', None)
     
     # Print instructions to console (always do this for clarity)
     print(f"\n====================== GOOGLE OAUTH SETUP =======================")
@@ -376,8 +400,26 @@ def callback():
                 current_app.logger.error(f"Database error when storing user: {str(db_error)}")
                 # Continue with login flow even if database storage fails
             
-            # Include success message in the redirect
-            return redirect(url_for('home_page', message=f"Welcome, {user_name}!"))
+            # Set a flag to prevent redirect loops
+            session['from_callback'] = True
+            
+            # Determine where to redirect the user after successful login
+            if 'next_page' in session:
+                # Redirect to the page they were trying to access before login
+                next_page = session.pop('next_page')
+                current_app.logger.info(f"Redirecting user to previously requested page: {next_page}")
+                # Make sure the page exists, fallback to dashboard if not
+                try:
+                    # Check if the route exists
+                    url_for(next_page)
+                    return redirect(url_for(next_page, message=f"Welcome, {user_name}!"))
+                except Exception:
+                    current_app.logger.warning(f"Invalid next_page route: {next_page}, redirecting to dashboard")
+                    return redirect(url_for('dashboard', message=f"Welcome, {user_name}!"))
+            else:
+                # Default redirect to dashboard after successful login
+                current_app.logger.info(f"Redirecting user to dashboard after successful login")
+                return redirect(url_for('dashboard', message=f"Welcome, {user_name}!"))
         else:
             # Log specific issues with the user info
             missing_fields = []
