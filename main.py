@@ -1837,7 +1837,7 @@ def upload_file():
                     file_size = os.path.getsize(file_path)
                     readable_size = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
                     file_type = filename.rsplit('.', 1)[1].lower()
-                    upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     logger.info(f"File uploaded successfully: {filename}")
                     
@@ -2051,7 +2051,7 @@ def summarize_text():
     try:
         with open(text_file_path, 'w', encoding='utf-8') as f:
             f.write(f"Summary of {filename}\n")
-            f.write(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("-" * 50 + "\n\n")
             f.write(summary)
         logger.info(f"Summary text file created: {text_filename}")
@@ -2108,7 +2108,7 @@ def summarize_text():
             text_content=extracted_text,  # Store the full text content for chat
             text_filename=text_filename,
             audio_filename=audio_file,
-            upload_time=datetime.datetime.now(),
+            upload_time=datetime.now(),
             language=summary_language,  # Use the selected summary language
             auto_processed=True  # Mark as processed since we're doing it here
         )
@@ -2635,7 +2635,7 @@ def save_note():
             note.title = title
             note.content = content
             note.language = language
-            note.updated_at = datetime.datetime.utcnow()
+            note.updated_at = datetime.utcnow()
         else:
             # Create new note
             note = UserNote(
@@ -3400,7 +3400,7 @@ def guest_access():
         'name': 'Guest User',
         'email': 'guest@example.com',
         'picture': None,
-        'logged_in_at': datetime.datetime.now().isoformat(),
+        'logged_in_at': datetime.now().isoformat(),
         'auth_provider': 'guest',
         'is_guest': True
     }
