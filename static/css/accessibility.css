@@ -1,0 +1,161 @@
+/* Accessibility CSS for EduVoice */
+
+/* Base accessibility mode */
+.accessibility-enabled {
+    /* These styles apply when accessibility mode is enabled */
+}
+
+/* Font Size Settings */
+.font-size-small {
+    font-size: 0.9rem !important;
+}
+
+.font-size-medium {
+    font-size: 1rem !important;
+}
+
+.font-size-large {
+    font-size: 1.2rem !important;
+}
+
+.font-size-xlarge {
+    font-size: 1.5rem !important;
+}
+
+/* Line spacing */
+.line-spacing-normal {
+    line-height: 1.5 !important;
+}
+
+.line-spacing-increased {
+    line-height: 2 !important;
+}
+
+.line-spacing-double {
+    line-height: 2.5 !important;
+}
+
+/* High Contrast Mode */
+.high-contrast {
+    /* Higher contrast for better readability */
+    color: #ffffff !important;
+    background-color: #0f0f0f !important;
+}
+
+.high-contrast a {
+    color: #3fb3ff !important;
+    text-decoration: underline !important;
+}
+
+.high-contrast .btn-primary {
+    background-color: #ff9500 !important;
+    border-color: #ff9500 !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+}
+
+.high-contrast .btn-secondary {
+    background-color: #ffffff !important;
+    border-color: #ffffff !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+}
+
+.high-contrast .card {
+    border: 2px solid #ffffff !important;
+    background-color: #1a1a1a !important;
+}
+
+.high-contrast input, 
+.high-contrast select, 
+.high-contrast textarea {
+    background-color: #000000 !important;
+    border: 2px solid #ffffff !important;
+    color: #ffffff !important;
+}
+
+/* Dyslexia-friendly font */
+.dyslexia-friendly {
+    font-family: "OpenDyslexic", "Comic Sans MS", sans-serif !important;
+    word-spacing: 0.2em !important;
+    letter-spacing: 0.05em !important;
+}
+
+/* OpenDyslexic font */
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* Focus styles for keyboard navigation */
+.accessibility-enabled a:focus,
+.accessibility-enabled button:focus,
+.accessibility-enabled input:focus,
+.accessibility-enabled textarea:focus,
+.accessibility-enabled select:focus {
+    outline: 3px solid #ffbf00 !important;
+    outline-offset: 2px !important;
+}
+
+/* Remove animations when requested */
+.reduce-animations * {
+    animation: none !important;
+    transition: none !important;
+}
+
+/* Text justification for improved readability */
+.accessibility-enabled p, 
+.accessibility-enabled div,
+.accessibility-enabled span {
+    text-align: left !important;
+    hyphens: none !important;
+}
+
+/* Enhanced text content readability */
+.accessibility-enabled .card-body,
+.accessibility-enabled .summary-content,
+.accessibility-enabled .extracted-text {
+    padding: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Better form labeling and spacing */
+.accessibility-enabled label {
+    font-weight: bold !important;
+    margin-bottom: 0.5rem !important;
+    display: block !important;
+}
+
+.accessibility-enabled .form-group {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Improve button accessibility */
+.accessibility-enabled .btn {
+    padding: 0.75rem 1.5rem !important;
+    font-weight: bold !important;
+}
+
+/* Reading ruler - helps track text when reading */
+.reading-ruler {
+    position: fixed;
+    width: 100%;
+    height: 30px;
+    background-color: rgba(255, 255, 0, 0.2);
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+}
+
+.show-reading-ruler .reading-ruler {
+    display: block;
+}

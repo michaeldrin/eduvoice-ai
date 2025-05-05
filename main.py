@@ -684,9 +684,45 @@ def inject_global_variables():
     # Get user settings and make them available in all templates
     try:
         user_settings = get_user_settings()
+        
+        # Create accessibility class string based on user settings
+        accessibility_classes = []
+        
+        if user_settings.accessibility_mode:
+            accessibility_classes.append('accessibility-enabled')
+            
+            # Add font size class
+            if user_settings.font_size:
+                accessibility_classes.append(f'font-size-{user_settings.font_size}')
+                
+            # Add high contrast class if enabled
+            if user_settings.high_contrast:
+                accessibility_classes.append('high-contrast')
+                
+            # Add dyslexia-friendly font class if enabled
+            if user_settings.dyslexia_friendly:
+                accessibility_classes.append('dyslexia-friendly')
+                
+            # Add line spacing class
+            if user_settings.line_spacing:
+                if user_settings.line_spacing == 1.5:
+                    accessibility_classes.append('line-spacing-normal')
+                elif user_settings.line_spacing == 2.0:
+                    accessibility_classes.append('line-spacing-increased')
+                else:
+                    accessibility_classes.append('line-spacing-double')
+                    
+            # Add reduce animations class if enabled
+            if user_settings.reduce_animations:
+                accessibility_classes.append('reduce-animations')
+        
+        # Join all classes with a space
+        accessibility_class_string = ' '.join(accessibility_classes)
+        
     except Exception as e:
         logger.warning(f"Error getting user settings for template: {e}")
         user_settings = None
+        accessibility_class_string = ''
     
     # Check if user is logged in via Google OAuth
     google_user = session.get('user', None)
@@ -695,6 +731,7 @@ def inject_global_variables():
         'upload_url': url_for('upload_file'),
         'user_settings': user_settings,
         'theme_mode': user_settings.theme_mode if user_settings else 'dark',
+        'accessibility_classes': accessibility_class_string,
         'google_user': google_user,
         'is_logged_in': google_user is not None
     }
@@ -804,10 +841,32 @@ def settings():
             voice_speed = request.form.get('voice_speed', 'normal')
             theme_mode = request.form.get('theme_mode', 'dark')
             
+            # Get accessibility settings
+            accessibility_mode = 'accessibility_mode' in request.form
+            font_size = request.form.get('font_size', 'medium')
+            high_contrast = 'high_contrast' in request.form
+            dyslexia_friendly = 'dyslexia_friendly' in request.form
+            
+            # Convert line spacing to float
+            try:
+                line_spacing = float(request.form.get('line_spacing', '1.5'))
+            except ValueError:
+                line_spacing = 1.5
+                
+            reduce_animations = 'reduce_animations' in request.form
+            
             # Update the user settings
             user_settings.language = language
             user_settings.voice_speed = voice_speed
             user_settings.theme_mode = theme_mode
+            
+            # Update accessibility settings
+            user_settings.accessibility_mode = accessibility_mode
+            user_settings.font_size = font_size
+            user_settings.high_contrast = high_contrast
+            user_settings.dyslexia_friendly = dyslexia_friendly
+            user_settings.line_spacing = line_spacing
+            user_settings.reduce_animations = reduce_animations
             
             # Save the changes
             db.session.commit()

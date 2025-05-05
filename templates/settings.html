@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <!-- Custom styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Accessibility styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/accessibility.css') }}">
     <style>
         .settings-header {
             padding: 2rem 0;
@@ -37,6 +39,31 @@
             background-color: var(--bs-body-bg);
             color: var(--bs-body-color);
             border-color: var(--bs-border-color);
+        }
+        
+        /* Accessibility settings styles */
+        .form-switch {
+            padding-left: 3em;
+        }
+        .accessibility-option {
+            margin-bottom: 1.25rem;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--bs-border-color);
+        }
+        .accessibility-option:hover {
+            background-color: rgba(var(--bs-primary-rgb), 0.05);
+        }
+        .font-size-preview {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            background-color: rgba(var(--bs-secondary-rgb), 0.1);
+        }
+        .setting-description {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
         }
     </style>
 </head>
@@ -132,6 +159,119 @@
                                 </div>
                             </div>
                             
+                            <!-- Accessibility Settings -->
+                            <div class="settings-section">
+                                <div class="settings-section-title">
+                                    <i class="bi bi-universal-access"></i>
+                                    <h4 class="mb-0">Accessibility Preferences</h4>
+                                </div>
+                                
+                                <!-- Master Toggle -->
+                                <div class="accessibility-option">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" 
+                                               id="accessibility_mode" name="accessibility_mode" 
+                                               {% if user_settings.accessibility_mode %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="accessibility_mode">
+                                            Enable Accessibility Mode
+                                        </label>
+                                    </div>
+                                    <div class="setting-description">
+                                        Turn on enhanced readability features to make content more accessible
+                                    </div>
+                                </div>
+                                
+                                <!-- Font Size -->
+                                <div class="accessibility-option">
+                                    <label for="font_size" class="form-label fw-bold">Font Size</label>
+                                    <select class="form-select" id="font_size" name="font_size">
+                                        <option value="small" {% if user_settings.font_size == 'small' %}selected{% endif %}>Small</option>
+                                        <option value="medium" {% if user_settings.font_size == 'medium' %}selected{% endif %}>Medium (Default)</option>
+                                        <option value="large" {% if user_settings.font_size == 'large' %}selected{% endif %}>Large</option>
+                                        <option value="xlarge" {% if user_settings.font_size == 'xlarge' %}selected{% endif %}>Extra Large</option>
+                                    </select>
+                                    <div class="font-size-preview" id="font-size-preview">
+                                        This is a preview of the selected font size.
+                                    </div>
+                                    <div class="setting-description">
+                                        Adjust the text size throughout the application
+                                    </div>
+                                </div>
+                                
+                                <!-- High Contrast Mode -->
+                                <div class="accessibility-option">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" 
+                                               id="high_contrast" name="high_contrast" 
+                                               {% if user_settings.high_contrast %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="high_contrast">
+                                            High Contrast Mode
+                                        </label>
+                                    </div>
+                                    <div class="setting-description">
+                                        Enhance visual contrast for better readability
+                                    </div>
+                                </div>
+                                
+                                <!-- Dyslexia-friendly Font -->
+                                <div class="accessibility-option">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" 
+                                               id="dyslexia_friendly" name="dyslexia_friendly" 
+                                               {% if user_settings.dyslexia_friendly %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="dyslexia_friendly">
+                                            Dyslexia-friendly Font
+                                        </label>
+                                    </div>
+                                    <div class="setting-description">
+                                        Use OpenDyslexic font to improve readability for users with dyslexia
+                                    </div>
+                                </div>
+                                
+                                <!-- Line Spacing -->
+                                <div class="accessibility-option">
+                                    <label for="line_spacing" class="form-label fw-bold">Line Spacing</label>
+                                    <select class="form-select" id="line_spacing" name="line_spacing">
+                                        <option value="1.5" {% if user_settings.line_spacing == 1.5 %}selected{% endif %}>Normal</option>
+                                        <option value="2.0" {% if user_settings.line_spacing == 2.0 %}selected{% endif %}>Increased</option>
+                                        <option value="2.5" {% if user_settings.line_spacing == 2.5 %}selected{% endif %}>Double</option>
+                                    </select>
+                                    <div class="setting-description">
+                                        Adjust the spacing between lines of text for easier reading
+                                    </div>
+                                </div>
+                                
+                                <!-- Reduce Animations -->
+                                <div class="accessibility-option">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" 
+                                               id="reduce_animations" name="reduce_animations" 
+                                               {% if user_settings.reduce_animations %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="reduce_animations">
+                                            Reduce Animations
+                                        </label>
+                                    </div>
+                                    <div class="setting-description">
+                                        Minimize motion effects for users sensitive to movement
+                                    </div>
+                                </div>
+                                
+                                <!-- Reading Ruler (Client-side only) -->
+                                <div class="accessibility-option">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" 
+                                               id="reading_ruler_toggle" name="reading_ruler_toggle">
+                                        <label class="form-check-label fw-bold" for="reading_ruler_toggle">
+                                            Reading Ruler
+                                        </label>
+                                    </div>
+                                    <div class="setting-description">
+                                        Display a horizontal guide that follows your cursor to help track text while reading
+                                        <br><small class="text-muted">(This setting is stored in your browser only)</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="d-grid gap-2 mt-4">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bi bi-save"></i> Save Settings
@@ -159,7 +299,10 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Theme Preview Script -->
+    <!-- Accessibility Script -->
+    <script src="{{ url_for('static', filename='js/accessibility.js') }}"></script>
+    
+    <!-- Theme and Accessibility Preview Script -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Get the theme selector
@@ -170,6 +313,152 @@
                 // Update the data-bs-theme attribute on the html element
                 document.documentElement.setAttribute('data-bs-theme', this.value);
             });
+            
+            // Create Reading Ruler
+            const createReadingRuler = () => {
+                let ruler = document.querySelector('.reading-ruler');
+                if (!ruler) {
+                    ruler = document.createElement('div');
+                    ruler.className = 'reading-ruler';
+                    document.body.appendChild(ruler);
+                }
+                return ruler;
+            };
+            
+            // Font size preview functionality
+            const fontSizeSelect = document.getElementById('font_size');
+            const fontSizePreview = document.getElementById('font-size-preview');
+            
+            if (fontSizeSelect && fontSizePreview) {
+                // Apply the selected font size to the preview text
+                const updateFontSizePreview = () => {
+                    // Remove all font size classes
+                    fontSizePreview.classList.remove('font-size-small', 'font-size-medium', 'font-size-large', 'font-size-xlarge');
+                    // Add the selected font size class
+                    fontSizePreview.classList.add(`font-size-${fontSizeSelect.value}`);
+                };
+                
+                // Initialize preview
+                updateFontSizePreview();
+                
+                // Update preview when font size changes
+                fontSizeSelect.addEventListener('change', updateFontSizePreview);
+            }
+            
+            // Create reading ruler
+            const ruler = createReadingRuler();
+            
+            // Reading ruler functionality
+            const readingRulerToggle = document.getElementById('reading_ruler_toggle');
+            if (readingRulerToggle) {
+                readingRulerToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Enable reading ruler
+                        document.body.classList.add('show-reading-ruler');
+                        document.addEventListener('mousemove', updateRulerPosition);
+                    } else {
+                        // Disable reading ruler
+                        document.body.classList.remove('show-reading-ruler');
+                        document.removeEventListener('mousemove', updateRulerPosition);
+                    }
+                });
+                
+                // Update ruler position on mouse move
+                function updateRulerPosition(e) {
+                    ruler.style.top = (e.clientY - 15) + 'px';
+                }
+            }
+            
+            // Live preview functionality for accessibility options
+            const accessibilityToggle = document.getElementById('accessibility_mode');
+            const highContrastToggle = document.getElementById('high_contrast');
+            const dyslexiaFontToggle = document.getElementById('dyslexia_friendly');
+            const lineSpacingSelect = document.getElementById('line_spacing');
+            const reduceAnimationsToggle = document.getElementById('reduce_animations');
+            
+            // Apply live preview for each setting
+            if (accessibilityToggle) {
+                accessibilityToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        document.body.classList.add('accessibility-enabled');
+                    } else {
+                        document.body.classList.remove('accessibility-enabled');
+                    }
+                });
+            }
+            
+            if (highContrastToggle) {
+                highContrastToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        document.body.classList.add('high-contrast');
+                    } else {
+                        document.body.classList.remove('high-contrast');
+                    }
+                });
+            }
+            
+            if (dyslexiaFontToggle) {
+                dyslexiaFontToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        document.body.classList.add('dyslexia-friendly');
+                    } else {
+                        document.body.classList.remove('dyslexia-friendly');
+                    }
+                });
+            }
+            
+            if (lineSpacingSelect) {
+                lineSpacingSelect.addEventListener('change', function() {
+                    // Remove all line spacing classes
+                    document.body.classList.remove('line-spacing-normal', 'line-spacing-increased', 'line-spacing-double');
+                    
+                    // Add the selected line spacing class
+                    if (this.value === '1.5') {
+                        document.body.classList.add('line-spacing-normal');
+                    } else if (this.value === '2.0') {
+                        document.body.classList.add('line-spacing-increased');
+                    } else if (this.value === '2.5') {
+                        document.body.classList.add('line-spacing-double');
+                    }
+                });
+            }
+            
+            if (reduceAnimationsToggle) {
+                reduceAnimationsToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        document.body.classList.add('reduce-animations');
+                    } else {
+                        document.body.classList.remove('reduce-animations');
+                    }
+                });
+            }
+            
+            // Initialize all settings on page load
+            if (accessibilityToggle && accessibilityToggle.checked) {
+                document.body.classList.add('accessibility-enabled');
+            }
+            
+            if (highContrastToggle && highContrastToggle.checked) {
+                document.body.classList.add('high-contrast');
+            }
+            
+            if (dyslexiaFontToggle && dyslexiaFontToggle.checked) {
+                document.body.classList.add('dyslexia-friendly');
+            }
+            
+            if (lineSpacingSelect) {
+                if (lineSpacingSelect.value === '1.5') {
+                    document.body.classList.add('line-spacing-normal');
+                } else if (lineSpacingSelect.value === '2.0') {
+                    document.body.classList.add('line-spacing-increased');
+                } else if (lineSpacingSelect.value === '2.5') {
+                    document.body.classList.add('line-spacing-double');
+                }
+            }
+            
+            if (reduceAnimationsToggle && reduceAnimationsToggle.checked) {
+                document.body.classList.add('reduce-animations');
+            }
         });
     </script>
 </body>

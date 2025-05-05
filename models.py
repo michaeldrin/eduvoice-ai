@@ -36,6 +36,14 @@ class UserSettings(db.Model):
     voice_speed = db.Column(db.String(10), default='normal')  # Slow, Normal, Fast
     theme_mode = db.Column(db.String(10), default='dark')  # Dark or Light
     
+    # Accessibility settings
+    accessibility_mode = db.Column(db.Boolean, default=False)  # Enable/disable accessibility features
+    font_size = db.Column(db.String(10), default='medium')  # Small, Medium, Large, X-Large
+    high_contrast = db.Column(db.Boolean, default=False)  # High contrast mode
+    dyslexia_friendly = db.Column(db.Boolean, default=False)  # Dyslexia-friendly font
+    line_spacing = db.Column(db.Float, default=1.5)  # Line spacing factor
+    reduce_animations = db.Column(db.Boolean, default=False)  # Reduce UI animations
+    
     # Usage tracking fields
     files_uploaded = db.Column(db.Integer, default=0)  # Count of files uploaded
     summaries_generated = db.Column(db.Integer, default=0)  # Count of summaries
@@ -61,6 +69,16 @@ class UserSettings(db.Model):
             'language': self.language,
             'voice_speed': self.voice_speed,
             'theme_mode': self.theme_mode,
+            
+            # Accessibility settings
+            'accessibility_mode': self.accessibility_mode,
+            'font_size': self.font_size,
+            'high_contrast': self.high_contrast,
+            'dyslexia_friendly': self.dyslexia_friendly,
+            'line_spacing': self.line_spacing,
+            'reduce_animations': self.reduce_animations,
+            
+            # Usage stats
             'files_uploaded': self.files_uploaded,
             'summaries_generated': self.summaries_generated,
             'audio_minutes': self.audio_minutes,
