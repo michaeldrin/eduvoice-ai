@@ -85,17 +85,10 @@
     {% if is_logged_in %}
         {% include 'components/navbar.html' %}
     {% else %}
-        <!-- Simple header with login buttons for non-authenticated users -->
+        <!-- Simple header without login buttons (moved to hero section) -->
         <header class="py-3">
             <div class="container">
-                <div class="d-flex justify-content-end">
-                    <a href="{{ url_for('auth.login') }}" class="btn btn-light rounded-pill me-2 shadow-sm">
-                        <i class="bi bi-google me-1"></i> Login
-                    </a>
-                    <a href="{{ url_for('guest_access') }}" class="btn btn-outline-light rounded-pill shadow-sm">
-                        <i class="bi bi-person me-1"></i> Guest
-                    </a>
-                </div>
+                <!-- Empty space where login buttons used to be -->
             </div>
         </header>
     {% endif %}
@@ -140,24 +133,68 @@
                     
                     <!-- Usage stats removed from homepage -->
                     
-                    <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
-                        {% if is_logged_in %}
-                        <a href="/upload" class="btn btn-primary btn-lg get-started-btn">
+                    {% if is_logged_in %}
+                    <!-- Button for logged-in users -->
+                    <div class="d-flex justify-content-center">
+                        <a href="/upload" class="login-btn btn btn-primary">
                             <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
                         </a>
-                        {% else %}
-                        <a href="/login" class="btn btn-primary btn-lg get-started-btn" style="background-color: var(--bs-indigo); border-color: var(--bs-indigo); box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.3s ease;">
-                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
-                        </a>
-                        {% endif %}
                     </div>
+                    {% else %}
+                    <!-- Redesigned login buttons with consistent styling -->
+                    <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-3 mt-5">
+                        <a href="{{ url_for('auth.login') }}" class="login-btn btn btn-primary">
+                            <i class="bi bi-google me-2"></i> Login with Google
+                        </a>
+                        <a href="{{ url_for('guest_access') }}" class="login-btn btn btn-outline-primary">
+                            <i class="bi bi-person-fill me-2"></i> Continue as Guest
+                        </a>
+                    </div>
+                    {% endif %}
                     
                     <style>
-                        .get-started-btn:hover {
-                            transform: translateY(-2px);
-                            box-shadow: 0 6px 12px rgba(0,0,0,0.2) !important;
-                            background-color: var(--bs-indigo);
+                        /* Standardized button styling */
+                        .login-btn {
+                            min-width: 250px;
+                            padding: 0.85rem 1.5rem;
+                            font-size: 1.1rem;
+                            font-weight: 600;
+                            border-radius: 1rem;
+                            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                            transition: all 0.3s ease;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            margin: 0.5rem;
+                        }
+                        
+                        .login-btn:hover {
+                            transform: translateY(-3px);
+                            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
                             filter: brightness(110%);
+                        }
+                        
+                        .btn-primary {
+                            background-color: var(--bs-indigo);
+                            border-color: var(--bs-indigo);
+                        }
+                        
+                        .btn-outline-primary {
+                            color: var(--bs-indigo);
+                            border-color: var(--bs-indigo);
+                        }
+                        
+                        .btn-outline-primary:hover {
+                            background-color: var(--bs-indigo);
+                            color: white;
+                        }
+                        
+                        /* Responsive adjustments */
+                        @media (max-width: 768px) {
+                            .login-btn {
+                                width: 100%;
+                                margin: 0.5rem 0;
+                            }
                         }
                     </style>
                 </div>
