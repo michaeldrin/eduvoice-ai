@@ -3,72 +3,237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
+    <title>{{ title }} - AI-Powered Document Processor</title>
     <!-- Use Replit-themed Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <!-- Custom styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        /* Landing page specific styles */
+        .hero-section {
+            padding: 6rem 0;
+            background: linear-gradient(rgba(var(--bs-primary-rgb), 0.1), rgba(var(--bs-primary-rgb), 0.05));
+            border-radius: 1rem;
+            margin-bottom: 4rem;
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--bs-primary);
+            background-color: rgba(var(--bs-primary-rgb), 0.1);
+            padding: 1.5rem;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .feature-card {
+            padding: 2rem;
+            border-radius: 1rem;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .get-started-btn {
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            border-radius: 2rem;
+            margin-top: 2rem;
+            box-shadow: 0 4px 10px rgba(var(--bs-primary-rgb), 0.3);
+        }
+        
+        .app-logo {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+        }
+        
+        .footer {
+            margin-top: 5rem;
+            padding: 2rem 0;
+            border-top: 1px solid var(--bs-border-color);
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 4rem 0;
+            }
+            
+            .feature-icon {
+                font-size: 2rem;
+                padding: 1rem;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card shadow-sm">
-                    <div class="card-body text-center p-5">
-                        {% if error %}
-                            <div class="alert alert-danger" role="alert">
-                                {{ error }}
-                            </div>
-                        {% endif %}
-                        
-                        <h1 class="display-4 mb-4">Document Processor</h1>
-                        <p class="lead">Extract and summarize text from your documents using AI.</p>
-                        
-                        <!-- Include usage stats component -->
-                        {% include 'usage_stats.html' %}
-                        
-                        <hr class="my-4">
-                        
-                        <div class="mt-4">
-                            <p>Features included:</p>
-                            <ul class="list-group list-group-flush text-start mb-4">
-                                <li class="list-group-item">Upload and process PDF and DOCX files</li>
-                                <li class="list-group-item">Extract text content from documents</li>
-                                <li class="list-group-item">Generate AI summaries using OpenAI's GPT-4o</li>
-                                <li class="list-group-item">Convert summaries to speech with text-to-speech</li>
-                                <li class="list-group-item">View both original text and summaries</li>
-                                <li class="list-group-item">Download summaries as text files</li>
-                                <li class="list-group-item">Listen to summaries with built-in audio player</li>
-                                <li class="list-group-item">Download audio files for offline listening</li>
-                                <li class="list-group-item">Interactive audio visualizer with frequency analysis</li>
-                                <li class="list-group-item">User dashboard to manage upload history</li>
-                                <li class="list-group-item">Customizable language and voice settings</li>
-                                <li class="list-group-item">Light and dark theme options</li>
-                                <li class="list-group-item">Responsive design using Bootstrap</li>
-                            </ul>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="{{ url_for('static', filename='eduvoice-logo.svg') }}" alt="EduVoice Logo" height="30" class="me-2">
+                <span>EduVoice</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/"><i class="bi bi-house-fill me-1"></i> Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/upload"><i class="bi bi-upload me-1"></i> Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard"><i class="bi bi-table me-1"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/settings"><i class="bi bi-gear-fill me-1"></i> Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Hero Section -->
+        <section class="hero-section text-center">
+            <div class="row justify-content-center">
+                <div class="col-md-10">
+                    <!-- App Logo -->
+                    <div class="mb-4">
+                        <img src="{{ url_for('static', filename='eduvoice-logo.svg') }}" alt="EduVoice Logo" width="120" height="120">
+                    </div>
+                    
+                    <h1 class="display-3 fw-bold mb-3">EduVoice</h1>
+                    <p class="lead fs-2 mb-5">Learn Smarter. Faster. With AI.</p>
+                    
+                    {% if error %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ error }}
                         </div>
-                        
-                        <div class="mt-3">
-                            <a href="/upload" class="btn btn-primary mt-3">
-                                <i class="bi bi-upload"></i> Upload Files
-                            </a>
-                            <a href="/dashboard" class="btn btn-info mt-3">
-                                <i class="bi bi-table"></i> View Dashboard
-                            </a>
-                            <a href="/settings" class="btn btn-success mt-3">
-                                <i class="bi bi-gear"></i> Settings
-                            </a>
-                            <a href="/" class="btn btn-secondary mt-3">
-                                <i class="bi bi-arrow-clockwise"></i> Refresh
-                            </a>
-                        </div>
+                    {% endif %}
+                    
+                    <!-- Include usage stats component -->
+                    {% include 'usage_stats.html' %}
+                    
+                    <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                        <a href="/upload" class="btn btn-primary btn-lg get-started-btn">
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
+                        </a>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+        
+        <!-- What is EduVoice Section -->
+        <section class="mb-5">
+            <div class="row justify-content-center">
+                <div class="col-lg-8 text-center">
+                    <h2 class="display-5 mb-4">What is EduVoice?</h2>
+                    <p class="lead">
+                        EduVoice is an AI-powered document processing tool that transforms your learning materials into easy-to-digest summaries and natural-sounding audio. 
+                        It helps you learn more efficiently by extracting the key information from documents and presenting it in formats that match your learning style.
+                    </p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Features Section -->
+        <section class="features-section">
+            <h2 class="text-center display-5 mb-5">Features</h2>
+            <div class="row g-4">
+                <!-- Feature 1 -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-upload"></i>
+                        </div>
+                        <h3>Upload Materials</h3>
+                        <p>Upload your own PDF and DOCX documents to process them with our advanced AI tools.</p>
+                    </div>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <h3>AI Summaries</h3>
+                        <p>Get instant AI-generated summaries that capture the essential information from your documents.</p>
+                    </div>
+                </div>
+                
+                <!-- Feature 3 -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-volume-up"></i>
+                        </div>
+                        <h3>Natural Voice</h3>
+                        <p>Listen to your content in natural-sounding voice with interactive audio visualizer.</p>
+                    </div>
+                </div>
+                
+                <!-- Feature 4 -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="feature-card text-center">
+                        <div class="feature-icon">
+                            <i class="bi bi-translate"></i>
+                        </div>
+                        <h3>Customizable</h3>
+                        <p>Choose your preferred language and voice speed to match your learning preferences.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer Section -->
+        <footer class="footer">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-3">
+                        <img src="{{ url_for('static', filename='eduvoice-logo.svg') }}" alt="EduVoice Logo" height="30" class="me-2">
+                        <h5 class="mb-0">EduVoice</h5>
+                    </div>
+                    <p class="text-muted">
+                        Transform your learning materials into accessible formats with the power of AI.
+                    </p>
+                    <p class="small text-muted">
+                        &copy; 2025 EduVoice. All rights reserved.
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="mb-3">Contact Us</h5>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="bi bi-envelope me-2"></i>
+                            <a href="mailto:contact@eduvoice.example.com" class="text-decoration-none">contact@eduvoice.example.com</a>
+                        </li>
+                        <li class="mb-2">
+                            <i class="bi bi-github me-2"></i>
+                            <a href="https://github.com/eduvoice/app" class="text-decoration-none">GitHub</a>
+                        </li>
+                        <li>
+                            <i class="bi bi-twitter me-2"></i>
+                            <a href="https://twitter.com/eduvoice" class="text-decoration-none">Twitter</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </footer>
+    </div> <!-- End of container -->
     
     <!-- Include the Floating Action Button -->
     {% include 'components/floating_action_button.html' %}

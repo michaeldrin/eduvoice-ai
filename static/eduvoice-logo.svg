@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="60" cy="60" r="50" fill="#0d6efd" opacity="0.8"/>
+  
+  <!-- Inner Circle -->
+  <circle cx="60" cy="60" r="45" fill="#0a58ca"/>
+  
+  <!-- Document Icon -->
+  <path d="M40 30H65L80 45V90H40V30Z" fill="white"/>
+  <path d="M65 30V45H80L65 30Z" fill="#E6E6E6"/>
+  
+  <!-- Text Lines -->
+  <rect x="47" y="55" width="26" height="3" rx="1.5" fill="#0d6efd"/>
+  <rect x="47" y="63" width="26" height="3" rx="1.5" fill="#0d6efd"/>
+  <rect x="47" y="71" width="20" height="3" rx="1.5" fill="#0d6efd"/>
+  
+  <!-- Sound Waves -->
+  <path d="M85 45C90 50 93 55 93 60C93 65 90 70 85 75" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M90 40C96 47 100 53 100 60C100 67 96 73 90 80" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

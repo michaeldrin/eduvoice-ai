@@ -337,7 +337,8 @@ def home_page():
     
     return render_template(
         "index.html", 
-        title="Document Processor",
+        title="EduVoice",
+        theme_mode=user_settings.theme_mode,
         request=request,
         usage_stats=user_settings
     )
