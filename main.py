@@ -693,7 +693,18 @@ def summarize_text():
     
     # Save to database
     try:
+        # Get the current user's ID (email) or session ID for guest users
+        user_id = None
+        if 'user' in session and 'email' in session['user']:
+            user_id = session['user']['email']
+            logger.info(f"Associating document with user: {user_id}")
+        else:
+            # Use session ID for guest users
+            user_id = session.get('session_id', uuid.uuid4().hex)
+            logger.info(f"Associating document with guest session: {user_id}")
+            
         document = Document(
+            user_id=user_id,  # Associate document with user
             filename=filename,
             filetype=filetype,
             summary=summary,
