@@ -36,6 +36,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'docx'}
 app.config['PREVIEW_TEXT_MAX_LENGTH'] = 10000  # Limit preview text for large documents
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-secret-key")
+app.debug = True  # Enable debug mode to get detailed error messages
 
 # Configure the database with PostgreSQL
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -816,135 +817,179 @@ def upload_file():
     """
     Route to handle file uploads (requires login)
     """
-    # Get the current user settings
-    user_settings = get_user_settings()
-    
-    if request.method == 'POST':
-        logger.debug("Processing file upload")
+    try:
+        # Get the current user settings
+        user_settings = get_user_settings()
         
-        # Check if user has reached daily upload limit
-        if not user_settings.can_upload_file():
-            logger.warning(f"User {user_settings.session_id} has reached daily upload limit")
-            return render_template(
-                "upload.html", 
-                title="File Upload",
-                error="You've reached your daily upload limit (5 files per day). Please try again tomorrow or upgrade your account.",
-                usage_stats=user_settings
-            )
-        
-        # Check if the post request has the file part
-        if 'file' not in request.files:
-            logger.error("No file part in the request")
-            return render_template(
-                "upload.html", 
-                title="File Upload",
-                error="No file selected",
-                usage_stats=user_settings
-            )
+        if request.method == 'POST':
+            logger.debug("Processing file upload")
             
-        file = request.files['file']
-        
-        # If user does not select file, browser also
-        # submit an empty part without filename
-        if file.filename == '':
-            logger.error("No file selected")
-            return render_template(
-                "upload.html", 
-                title="File Upload",
-                error="No file selected",
-                usage_stats=user_settings
-            )
-            
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            
-            # Increment the file upload counter
-            user_settings.increment_file_uploads()
-            db.session.commit()
-            logger.info(f"Incremented file uploads for user {user_settings.session_id}: {user_settings.files_uploaded}")
-            
-            # Get file details
-            file_size = os.path.getsize(file_path)
-            readable_size = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
-            file_type = filename.rsplit('.', 1)[1].lower()
-            upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            logger.info(f"File uploaded successfully: {filename}")
-            
-            # Extract text based on file type
-            try:
-                extracted_text = ""
-                error_message = None
-                
-                if file_type == 'pdf':
-                    extracted_text, error_message = extract_text_from_pdf(file_path)
-                elif file_type == 'docx':
-                    extracted_text, error_message = extract_text_from_docx(file_path)
-                else:
-                    logger.error(f"Unsupported file type for text extraction: {file_type}")
-                    return render_template(
-                        "upload.html",
-                        title="File Upload",
-                        error=f"Cannot extract text from {file_type.upper()} files",
-                        usage_stats=user_settings
-                    )
-                
-                # Check if text extraction was successful
-                if error_message or not extracted_text:
-                    logger.error(f"Text extraction failed for {filename}: {error_message}")
-                    return render_template(
-                        "upload.html",
-                        title="File Upload",
-                        error=error_message or "Failed to extract text from the file.",
-                        usage_stats=user_settings
-                    )
-                
-                # Get the total length of extracted text
-                total_length = len(extracted_text)
-                
-                # Check if we need to truncate the text for the preview
-                truncated = False
-                if total_length > app.config['PREVIEW_TEXT_MAX_LENGTH']:
-                    extracted_text = extracted_text[:app.config['PREVIEW_TEXT_MAX_LENGTH']] + "..."
-                    truncated = True
-                
-                # Render the preview template with the extracted text
+            # Check if user has reached daily upload limit
+            if not user_settings.can_upload_file():
+                logger.warning(f"User {user_settings.session_id} has reached daily upload limit")
                 return render_template(
-                    "preview.html",
-                    title="Text Preview",
-                    filename=filename,
-                    filetype=file_type.upper(),
-                    extracted_text=extracted_text,
-                    total_length=total_length,
-                    truncated=truncated,
-                    usage_stats=user_settings
-                )
-                
-            except Exception as e:
-                logger.error(f"Error processing file {filename}: {str(e)}")
-                return render_template(
-                    "upload.html",
+                    "upload.html", 
                     title="File Upload",
-                    error=f"Error extracting text: {str(e)}",
+                    error="You've reached your daily upload limit (5 files per day). Please try again tomorrow or upgrade your account.",
                     usage_stats=user_settings
                 )
+            
+            # Check if the post request has the file part
+            if 'file' not in request.files:
+                logger.error("No file part in the request")
+                return render_template(
+                    "upload.html", 
+                    title="File Upload",
+                    error="No file selected",
+                    usage_stats=user_settings
+                )
+                
+            file = request.files['file']
+            
+            # If user does not select file, browser also
+            # submit an empty part without filename
+            if file.filename == '':
+                logger.error("No file selected")
+                return render_template(
+                    "upload.html", 
+                    title="File Upload",
+                    error="No file selected",
+                    usage_stats=user_settings
+                )
+                
+            if file and allowed_file(file.filename):
+                try:
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
+                    
+                    # Increment the file upload counter
+                    user_settings.increment_file_uploads()
+                    db.session.commit()
+                    logger.info(f"Incremented file uploads for user {user_settings.session_id}: {user_settings.files_uploaded}")
+                    
+                    # Get file details
+                    file_size = os.path.getsize(file_path)
+                    readable_size = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
+                    file_type = filename.rsplit('.', 1)[1].lower()
+                    upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    logger.info(f"File uploaded successfully: {filename}")
+                    
+                    # Extract text based on file type
+                    try:
+                        extracted_text = ""
+                        error_message = None
+                        
+                        if file_type == 'pdf':
+                            extracted_text, error_message = extract_text_from_pdf(file_path)
+                        elif file_type == 'docx':
+                            extracted_text, error_message = extract_text_from_docx(file_path)
+                        else:
+                            logger.error(f"Unsupported file type for text extraction: {file_type}")
+                            return render_template(
+                                "upload.html",
+                                title="File Upload",
+                                error=f"Cannot extract text from {file_type.upper()} files",
+                                usage_stats=user_settings
+                            )
+                        
+                        # Check if text extraction was successful
+                        if error_message or not extracted_text:
+                            logger.error(f"Text extraction failed for {filename}: {error_message}")
+                            # More user-friendly error message
+                            fallback_error = f"Could not read this {file_type.upper()} file. It may be password-protected, contain only images, or be in an unsupported format."
+                            return render_template(
+                                "upload.html",
+                                title="File Upload",
+                                error=error_message or fallback_error,
+                                usage_stats=user_settings
+                            )
+                        
+                        # Get the total length of extracted text
+                        total_length = len(extracted_text)
+                        
+                        # Check if we need to truncate the text for the preview
+                        truncated = False
+                        preview_text = extracted_text
+                        if total_length > app.config['PREVIEW_TEXT_MAX_LENGTH']:
+                            preview_text = extracted_text[:app.config['PREVIEW_TEXT_MAX_LENGTH']] + "... (truncated for preview)"
+                            truncated = True
+                            logger.info(f"Text truncated for preview: {total_length} characters")
+                        
+                        # Render the preview template with the extracted text
+                        return render_template(
+                            "preview.html",
+                            title="Text Preview",
+                            filename=filename,
+                            filetype=file_type.upper(),
+                            extracted_text=preview_text,
+                            total_length=total_length,
+                            truncated=truncated,
+                            usage_stats=user_settings
+                        )
+                        
+                    except Exception as e:
+                        logger.exception(f"Error processing file {filename} content: {str(e)}")
+                        # Rollback database transaction if any
+                        db.session.rollback()
+                        error_detail = str(e)
+                        # Clean up detailed error messages for user display
+                        user_error = f"Error extracting text: Could not process {file_type.upper()} file content"
+                        # Log the detailed error for debugging
+                        logger.error(f"Detailed error: {error_detail}")
+                        return render_template(
+                            "upload.html",
+                            title="File Upload",
+                            error=user_error,
+                            usage_stats=user_settings
+                        )
+                        
+                except Exception as save_error:
+                    logger.exception(f"Error saving file {file.filename}: {str(save_error)}")
+                    db.session.rollback()
+                    return render_template(
+                        "upload.html",
+                        title="File Upload",
+                        error=f"Could not save file. {str(save_error)}",
+                        usage_stats=user_settings
+                    )
+            else:
+                logger.error(f"Invalid file type: {file.filename if file and file.filename else 'unknown'}")
+                return render_template(
+                    "upload.html", 
+                    title="File Upload",
+                    error="Only PDF and DOCX files are allowed",
+                    usage_stats=user_settings
+                )
+        
+        # GET request - show upload form
+        return render_template(
+            "upload.html", 
+            title="File Upload",
+            usage_stats=user_settings
+        )
+        
+    except Exception as e:
+        # This catch-all exception handler prevents 500 errors
+        logger.exception(f"Unhandled exception in upload route: {str(e)}")
+        db.session.rollback()  # Ensure any failed database transactions are rolled back
+        
+        # Return direct error details in debug mode
+        if app.debug:
+            # Return a detailed error response for debugging
+            error_detail = f"Error in upload route: {str(e)}"
+            return f"<h1>Server Error (500)</h1><pre>{error_detail}</pre>", 500
         else:
-            logger.error("Invalid file type")
+            # In production, show the user-friendly error page
             return render_template(
-                "upload.html", 
-                title="File Upload",
-                error="Only PDF and DOCX files are allowed",
-                usage_stats=user_settings
-            )
-    
-    # GET request - show upload form
-    return render_template(
-        "upload.html", 
-        title="File Upload",
-        usage_stats=user_settings
-    )
+                "error.html",
+                title="Server Error",
+                code=500,
+                message="Something went wrong with your request.",
+                description="Our technical team has been notified. Please try again later.",
+                show_details=False
+            ), 500
 
 # Route for text summarization using OpenAI
 @app.route('/summarize', methods=['POST'])
