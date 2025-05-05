@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="{{ theme_mode }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -145,12 +145,19 @@
                 </div>
                 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="/upload" class="btn btn-primary">
-                        <i class="bi bi-upload"></i> Upload New Document
-                    </a>
-                    <a href="/" class="btn btn-secondary">
-                        <i class="bi bi-house"></i> Back to Home
-                    </a>
+                    <div>
+                        <a href="/upload" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload New Document
+                        </a>
+                    </div>
+                    <div>
+                        <a href="/settings" class="btn btn-success">
+                            <i class="bi bi-gear"></i> Settings
+                        </a>
+                        <a href="/" class="btn btn-secondary">
+                            <i class="bi bi-house"></i> Back to Home
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

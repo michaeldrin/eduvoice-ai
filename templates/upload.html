@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="{{ theme_mode }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,9 +59,14 @@
                             <a href="/" class="btn btn-secondary">
                                 <i class="bi bi-house"></i> Back to Home
                             </a>
-                            <a href="/dashboard" class="btn btn-info">
-                                <i class="bi bi-table"></i> View Dashboard
-                            </a>
+                            <div>
+                                <a href="/settings" class="btn btn-success">
+                                    <i class="bi bi-gear"></i> Settings
+                                </a>
+                                <a href="/dashboard" class="btn btn-info">
+                                    <i class="bi bi-table"></i> Dashboard
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
