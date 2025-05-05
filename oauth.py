@@ -14,14 +14,40 @@ def init_oauth(app):
     """Initialize OAuth with the Flask app"""
     oauth.init_app(app)
     
-    # Register the Google OAuth provider
+    # Get credentials with error checking
+    client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
+    
+    if not client_id or not client_secret:
+        app.logger.error("Google OAuth credentials missing. Please check environment variables.")
+        missing = []
+        if not client_id:
+            missing.append("GOOGLE_OAUTH_CLIENT_ID")
+        if not client_secret:
+            missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
+        app.logger.error(f"Missing OAuth credentials: {', '.join(missing)}")
+    
+    # Log the domain used for Replit
+    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN') 
+    if replit_domain:
+        app.logger.info(f"Detected Replit environment with domain: {replit_domain}")
+        # Print clear instructions for the redirect URI setup
+        print(f"\n====================== GOOGLE OAUTH SETUP =======================")
+        print(f"To make Google authentication work, add this EXACT URI to your")
+        print(f"authorized redirect URIs in Google Cloud Console:")
+        print(f"https://{replit_domain}/callback")
+        print(f"================================================================\n")
+    
+    # Register the Google OAuth provider with explicit parameters
     oauth.register(
         name='google',
-        client_id=os.environ.get('GOOGLE_OAUTH_CLIENT_ID'),
-        client_secret=os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET'),
+        client_id=client_id,
+        client_secret=client_secret,
         server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
         client_kwargs={
-            'scope': 'openid email profile'
+            'scope': 'openid email profile',
+            'prompt': 'select_account',  # Always ask which account to use
+            'access_type': 'online'      # We don't need offline access
         }
     )
 
@@ -29,10 +55,7 @@ def init_oauth(app):
 @auth_bp.route('/login')
 def login():
     """Redirect to Google for OAuth login"""
-    # Get the Replit domain from environment variables
-    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
-    
-    # Get the Google OAuth client ID to check if it's configured
+    # Verify OAuth credentials are available
     client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
     client_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
     
@@ -45,95 +68,181 @@ def login():
             missing.append("GOOGLE_OAUTH_CLIENT_SECRET")
         return redirect(url_for('home_page', error=f"Google OAuth is not properly configured. Missing: {', '.join(missing)}"))
     
-    # Log the available callback paths
-    current_app.logger.debug(f"Auth blueprint callback: {url_for('auth.callback', _external=True)}")
-    current_app.logger.debug(f"Root callback: {url_for('oauth_callback', _external=True)}")
+    # Determine the correct callback URL based on environment
+    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
     
-    # For Replit, we need to use the specific format required by Google OAuth
+    # For Replit, construct the callback URL using the REPLIT_DEV_DOMAIN
     if replit_domain:
-        # This is the format Google OAuth expects for Replit
+        # This must exactly match what's in your Google Cloud Console
         redirect_uri = f"https://{replit_domain}/callback"
-        current_app.logger.info(f"Using Replit redirect URI: {redirect_uri}")
         
-        # Print to console for easier setup
+        # Log the exact URI for debugging purposes
+        current_app.logger.info(f"Using Replit callback URI: {redirect_uri}")
+        current_app.logger.info("If login fails with 403 error, verify this exact URI is added to Google Cloud Console")
+        
+        # Print instructions to console to make it very clear
         print(f"\n====================== GOOGLE OAUTH SETUP =======================")
-        print(f"To make Google authentication work, add this to your authorized")
-        print(f"redirect URIs in Google Cloud Console:")
+        print(f"IMPORTANT: Add this exact URI to your Google Cloud Console")
+        print(f"(OAuth 2.0 Client IDs → Authorized redirect URIs):")
+        print(f"")
         print(f"{redirect_uri}")
+        print(f"")
+        print(f"If you continue to experience 403 errors:")
+        print(f"1. Ensure there are no extra spaces or characters in the URI")
+        print(f"2. If your app is in 'Testing' mode, add your email to test users")
+        print(f"3. Make sure Google+ API or People API is enabled")
         print(f"================================================================\n")
     else:
-        # Fallback to default url_for behavior (for local development)
-        redirect_uri = url_for('oauth_callback', _external=True) 
-        current_app.logger.info(f"Using standard redirect URI: {redirect_uri}")
-    
-    # Log OAuth configuration for debugging
-    current_app.logger.info(f"OAuth config: client_id={client_id[:5]}..., redirect_uri={redirect_uri}")
+        # For local development - though this won't work for Google OAuth typically
+        redirect_uri = url_for('oauth_callback', _external=True, _scheme='https')
+        current_app.logger.info(f"Using local development redirect URI: {redirect_uri}")
     
     try:
-        return oauth.google.authorize_redirect(redirect_uri)
+        # Save the redirect URI used in the session for verification during callback
+        session['oauth_redirect_uri'] = redirect_uri
+        
+        # Include explicit parameters for more reliable OAuth flow
+        return oauth.google.authorize_redirect(
+            redirect_uri=redirect_uri,
+            prompt='select_account'  # Always show account selector
+        )
     except Exception as e:
         current_app.logger.error(f"Error in OAuth redirect: {str(e)}")
-        return redirect(url_for('home_page', error=f"Error starting authentication: {str(e)}"))
+        current_app.logger.error(f"Error type: {type(e).__name__}")
+        # Create a more detailed error message for debugging
+        error_details = f"Type: {type(e).__name__}, Message: {str(e)}"
+        return redirect(url_for('home_page', error=f"Error starting authentication: {error_details}"))
 
 
 @auth_bp.route('/callback')
 def callback():
     """Callback endpoint for Google OAuth"""
     try:
-        # Detailed logging for debugging
-        current_app.logger.info(f"Callback received: {request.url}")
-        current_app.logger.info(f"Callback args: {request.args}")
+        # Extremely detailed logging for debugging 403 errors
+        current_app.logger.info(f"==================== OAUTH CALLBACK ====================")
+        current_app.logger.info(f"Callback received at: {datetime.datetime.now().isoformat()}")
+        current_app.logger.info(f"Full URL: {request.url}")
+        current_app.logger.info(f"Request method: {request.method}")
+        current_app.logger.info(f"URL parameters: {request.args}")
+        current_app.logger.info(f"Headers: {dict(request.headers)}")
         
-        # Check for error parameter in the callback URL
+        # Check for explicit error response from Google
         if 'error' in request.args:
             error_msg = request.args.get('error')
             error_description = request.args.get('error_description', 'No description provided')
-            current_app.logger.error(f"OAuth error in callback: {error_msg}")
+            current_app.logger.error(f"OAUTH ERROR RESPONSE: {error_msg}")
             current_app.logger.error(f"Error description: {error_description}")
+            
+            # Log helpful information for common errors
+            if error_msg == 'access_denied':
+                current_app.logger.error("The user declined to grant access to your application")
+            elif error_msg == 'redirect_uri_mismatch':
+                current_app.logger.error("The redirect URI in the request does not match the one registered in Google Console")
+                current_app.logger.error(f"Expected URI from session: {session.get('oauth_redirect_uri', 'Not found in session')}")
+                # Print the instructions again since this is the most common error
+                replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+                if replit_domain:
+                    uri = f"https://{replit_domain}/callback"
+                    print(f"\n====================== OAUTH ERROR: REDIRECT URI MISMATCH =======================")
+                    print(f"Add this EXACT redirect URI to Google Cloud Console:")
+                    print(f"{uri}")
+                    print(f"=============================================================================\n")
+            
             return redirect(url_for('home_page', error=f"Google authentication error: {error_msg} - {error_description}"))
             
-        # Check for HTTPS - Google OAuth requires HTTPS for the callback
+        # Validate HTTPS (Google OAuth requires HTTPS)
         if not request.url.startswith('https://') and not request.url.startswith('http://localhost'):
-            current_app.logger.error(f"Callback URL must use HTTPS: {request.url}")
-            current_app.logger.error("If running on Replit, make sure you're using the HTTPS URL.")
-            return redirect(url_for('home_page', error="OAuth error: Callback must use HTTPS. Please use the HTTPS URL for this application."))
+            current_app.logger.error(f"Non-HTTPS callback URL: {request.url}")
+            return redirect(url_for('home_page', error="OAuth error: HTTPS is required. Please use the secure URL."))
         
-        # Check for state parameter (important for CSRF protection)
+        # Verify state parameter to prevent CSRF attacks
         if 'state' not in request.args:
-            current_app.logger.error("Missing state parameter in callback")
-            return redirect(url_for('home_page', error="OAuth error: Missing state parameter. This may indicate a CSRF attack."))
+            current_app.logger.error("Missing state parameter in callback - potential CSRF attack")
+            return redirect(url_for('home_page', error="OAuth error: Missing state parameter. This may indicate a security issue."))
         
-        # Get the token
+        # Get the token with enhanced error handling
         try:
+            # Log what we're about to do
+            current_app.logger.info("Attempting to obtain access token from Google")
+            
+            # Get the token
             token = oauth.google.authorize_access_token()
-            current_app.logger.info("Token retrieved successfully")
-            # Log token details for debugging (excluding the actual token value for security)
+            
+            # Success - log what we received (securely)
+            current_app.logger.info("✓ Token successfully retrieved from Google")
             if token:
-                token_info = {k: v for k, v in token.items() if k != 'access_token' and k != 'id_token'}
-                current_app.logger.info(f"Token info: {token_info}")
+                # Log token info excluding sensitive parts
+                safe_token_info = {
+                    k: v for k, v in token.items() 
+                    if k not in ['access_token', 'id_token', 'refresh_token']
+                }
+                # Log expiration time if available
+                if 'expires_at' in token:
+                    import time
+                    expires_at = token['expires_at']
+                    current_time = time.time()
+                    expiry_delta = expires_at - current_time
+                    safe_token_info['expires_in_seconds'] = expiry_delta
+                    
+                current_app.logger.info(f"Token metadata: {safe_token_info}")
             else:
-                current_app.logger.warning("Token is empty or None")
+                current_app.logger.warning("Token response is empty or None - this is unexpected")
+                
         except Exception as token_error:
-            # Log detailed error information
-            current_app.logger.error(f"Failed to get token: {str(token_error)}")
+            # Comprehensive error logging for token acquisition failures
+            current_app.logger.error("✗ Failed to get token from Google")
             current_app.logger.error(f"Error type: {type(token_error).__name__}")
+            current_app.logger.error(f"Error message: {str(token_error)}")
             
-            # Check for specific error types to provide better error messages
-            if hasattr(token_error, 'description'):
-                current_app.logger.error(f"Error description: {token_error.description}")
-            
-            # Extract error message from OAuth error response if available
+            # Try to extract more detailed information from the error
             error_details = str(token_error)
-            if hasattr(token_error, 'response') and hasattr(token_error.response, 'json'):
-                try:
-                    error_json = token_error.response.json()
-                    current_app.logger.error(f"OAuth error response: {error_json}")
-                    if 'error_description' in error_json:
-                        error_details = f"{error_json.get('error', 'OAuth Error')}: {error_json.get('error_description')}"
-                except Exception as json_err:
-                    current_app.logger.error(f"Failed to parse error response: {str(json_err)}")
             
-            return redirect(url_for('home_page', error=f"Authentication failed: Could not get token. Make sure the redirect URI is correctly set in Google console. Error: {error_details}"))
+            # Check for OAuth-specific error attributes
+            if hasattr(token_error, 'description'):
+                error_description = getattr(token_error, 'description', 'No description available')
+                current_app.logger.error(f"OAuth error description: {error_description}")
+                error_details = f"{type(token_error).__name__}: {error_description}"
+            
+            # Check for HTTP response details if available
+            if hasattr(token_error, 'response'):
+                response = getattr(token_error, 'response', None)
+                if response:
+                    current_app.logger.error(f"Response status code: {getattr(response, 'status_code', 'Unknown')}")
+                    
+                    # Try to get JSON details from response
+                    try:
+                        if hasattr(response, 'json') and callable(response.json):
+                            error_json = response.json()
+                            current_app.logger.error(f"Full error response: {error_json}")
+                            
+                            # Extract the most relevant parts of the error
+                            if 'error' in error_json:
+                                if isinstance(error_json['error'], str):
+                                    error_code = error_json['error']
+                                    error_desc = error_json.get('error_description', '')
+                                    error_details = f"{error_code}: {error_desc}"
+                                elif isinstance(error_json['error'], dict):
+                                    error_code = error_json['error'].get('code', '')
+                                    error_message = error_json['error'].get('message', '')
+                                    error_details = f"Code {error_code}: {error_message}"
+                    except Exception as parse_err:
+                        current_app.logger.error(f"Failed to parse error response: {str(parse_err)}")
+                        
+                        # Try to get text content if JSON parsing failed
+                        if hasattr(response, 'text'):
+                            current_app.logger.error(f"Response text: {getattr(response, 'text', 'No text content')[:1000]}")
+            
+            # Display a user-friendly error message with detailed context
+            return redirect(url_for('home_page', error=f"""
+                Authentication failed: Could not get access token.
+                
+                Error: {error_details}
+                
+                Please check:
+                1. The redirect URI is exactly correct in Google Cloud Console
+                2. Your application has the necessary API permissions
+                3. Your account has access if the app is in testing mode
+            """.strip().replace('\n', ' ')))
         
         # Get user info from token
         try:

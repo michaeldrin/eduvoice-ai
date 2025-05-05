@@ -66,18 +66,55 @@ app.register_blueprint(auth_bp)
 @app.route('/callback')
 def oauth_callback():
     """Route to handle Google OAuth callback at root level"""
-    # Log detailed information about the callback
-    logger.info(f"Root callback URL received: {request.url}")
-    logger.info(f"Root callback args: {request.args}")
-    logger.info(f"Root callback method: {request.method}")
+    # Log detailed information about the callback for debugging
+    logger.info(f"==== ROOT LEVEL CALLBACK RECEIVED ====")
+    logger.info(f"Timestamp: {datetime.datetime.now().isoformat()}")
+    logger.info(f"Full callback URL: {request.url}")
+    logger.info(f"HTTP Method: {request.method}")
+    logger.info(f"Query parameters: {request.args}")
+    logger.info(f"HTTP Headers: {dict(request.headers)}")
     
-    # Check if there's a direct error in the callback
+    # Display the Replit domain for verification
+    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+    if replit_domain:
+        logger.info(f"Replit domain: {replit_domain}")
+        
+        # Compare URL with expected format
+        expected_callback = f"https://{replit_domain}/callback"
+        logger.info(f"Expected callback URL format: {expected_callback}")
+        
+        # Extract actual URL base for comparison
+        from urllib.parse import urlparse
+        actual_url = request.url
+        parsed = urlparse(actual_url)
+        actual_base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        logger.info(f"Actual URL base: {actual_base}")
+        
+        # Log mismatch if present
+        if actual_base != expected_callback and actual_base != expected_callback.replace('https://', 'http://'):
+            logger.warning(f"Potential URL mismatch - actual: {actual_base}, expected: {expected_callback}")
+    
+    # Check for direct error in the Google response
     if 'error' in request.args:
         error_msg = request.args.get('error')
         error_description = request.args.get('error_description', 'No description provided')
-        logger.error(f"OAuth error in root callback: {error_msg} - {error_description}")
+        logger.error(f"OAuth error parameter detected: {error_msg}")
+        logger.error(f"Error description: {error_description}")
+        
+        # Handle common error cases
+        if error_msg == 'redirect_uri_mismatch':
+            logger.error("This is a redirect URI mismatch error - make sure Google Console has the exact URI")
+            logger.error(f"Expected URI: https://{replit_domain}/callback")
+            
+            # Print to console for visibility
+            print(f"\n============== OAUTH ERROR: REDIRECT URI MISMATCH ==============")
+            print(f"The redirect URI in your Google Console doesn't match what Replit expects")
+            print(f"Add exactly this URI to Google Cloud Console OAuth 2.0 Client ID settings:")
+            print(f"https://{replit_domain}/callback")
+            print(f"==============================================================\n")
     
     # Pass to the auth blueprint's handler
+    logger.info("Forwarding callback to auth blueprint handler")
     return auth_bp.handle_google_callback()
     
 # This function has been moved to combine with the existing inject_global_variables
