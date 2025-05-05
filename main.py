@@ -2,6 +2,7 @@ import logging
 import os
 import datetime
 import uuid
+import traceback  # For enhanced error reporting
 import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
@@ -1393,38 +1394,97 @@ def document_chat_api(document_id):
     API endpoint for document chat interactions
     """
     try:
-        # Get the document
-        document = Document.query.get_or_404(document_id)
+        # Log API request
+        logger.info(f"Document chat API request received for document ID: {document_id}")
         
-        # Security check: make sure the current user owns this document
-        current_user_id = None
-        if 'user' in session:
-            current_user_id = session['user'].get('email')
-        else:
-            current_user_id = session.get('session_id', '')
+        # Validate document_id format
+        if not isinstance(document_id, int) or document_id <= 0:
+            logger.warning(f"Invalid document ID format: {document_id}")
+            return jsonify({'error': "Invalid document ID"}), 400
+        
+        try:
+            # Get the document
+            document = Document.query.get_or_404(document_id)
+            logger.debug(f"Retrieved document {document.id}: {document.filename}")
             
-        if document.user_id != current_user_id:
-            logger.warning(f"Unauthorized API access attempt to document {document_id} by {current_user_id}")
-            return jsonify({'error': "You don't have permission to access this document."}), 403
+            # Check if document has text content
+            if not document.text_content:
+                logger.warning(f"Document {document_id} has no text content for chat")
+                return jsonify({'error': "This document has no content to chat about"}), 400
+        except Exception as db_error:
+            logger.exception(f"Database error retrieving document {document_id}: {db_error}")
+            return jsonify({'error': "Could not retrieve the document. It may have been deleted."}), 404
+            
+        # Security check: make sure the current user owns this document
+        try:
+            current_user_id = None
+            if 'user' in session:
+                current_user_id = session['user'].get('email')
+            else:
+                current_user_id = session.get('session_id', '')
+                
+            if document.user_id != current_user_id:
+                logger.warning(f"Unauthorized API access attempt to document {document_id} by {current_user_id}")
+                return jsonify({'error': "You don't have permission to access this document."}), 403
+        except Exception as auth_error:
+            logger.exception(f"Authentication error in document chat API: {auth_error}")
+            return jsonify({'error': "Authentication error. Please log in again."}), 401
         
         # Get the user message from the request
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({'error': 'No message provided'}), 400
+        try:
+            data = request.get_json()
+            if not data:
+                logger.warning("No JSON data in request")
+                return jsonify({'error': 'Invalid request format. Expected JSON data.'}), 400
+                
+            if 'message' not in data:
+                logger.warning("Missing 'message' field in request data")
+                return jsonify({'error': 'Missing required field: message'}), 400
+                
+            user_message = data['message']
             
-        user_message = data['message']
+            # Check message content
+            if not user_message or not isinstance(user_message, str) or len(user_message.strip()) == 0:
+                logger.warning(f"Empty or invalid message content: {user_message}")
+                return jsonify({'error': 'Please provide a non-empty message'}), 400
+        except Exception as json_error:
+            logger.exception(f"Error parsing request JSON: {json_error}")
+            return jsonify({'error': 'Invalid JSON format in request'}), 400
         
-        # Generate a response
-        response, error = generate_chat_response(document_id, user_message)
-        
-        if error:
-            logger.error(f"Error generating chat response: {error}")
-            return jsonify({'error': error}), 500
+        # Generate a response with enhanced error handling
+        try:
+            response, error = generate_chat_response(document_id, user_message)
             
+            if error:
+                # Check for known error patterns to provide better errors
+                if "api key" in error.lower() or "apikey" in error.lower():
+                    # API key related error
+                    logger.error(f"OpenAI API key error: {error}")
+                    return jsonify({'error': "AI service unavailable due to API configuration issues. Please try again later or contact support."}), 503
+                elif "quota" in error.lower() or "limit" in error.lower() or "rate" in error.lower():
+                    # Rate limit or quota error
+                    logger.error(f"OpenAI API quota/rate limit error: {error}")
+                    return jsonify({'error': "AI service temporarily unavailable due to usage limits. Please try again in a few minutes."}), 429
+                else:
+                    # Other errors
+                    logger.error(f"Error generating chat response: {error}")
+                    return jsonify({'error': error}), 500
+        except Exception as ai_error:
+            logger.exception(f"Unexpected error in AI response generation: {ai_error}")
+            return jsonify({'error': "Failed to generate AI response"}), 500
+                
         # Get all chat messages for this document
-        chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
-        messages_json = [message.to_dict() for message in chat_messages]
+        try:
+            chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+            messages_json = [message.to_dict() for message in chat_messages]
+            logger.debug(f"Retrieved {len(messages_json)} chat messages for document {document_id}")
+        except Exception as chat_error:
+            logger.exception(f"Error retrieving chat messages: {chat_error}")
+            # Continue with empty chat history if there's an error
+            logger.info("Continuing with empty chat history due to retrieval error")
+            messages_json = []
         
+        # Success response
         return jsonify({
             'success': True,
             'response': response,
@@ -1432,8 +1492,16 @@ def document_chat_api(document_id):
         })
         
     except Exception as e:
-        logger.exception(f"Error in document chat API: {e}")
-        return jsonify({'error': f"An error occurred: {str(e)}"}), 500
+        logger.exception(f"Unhandled exception in document chat API: {e}")
+        if app.debug:
+            # In debug mode, include the detailed error
+            return jsonify({
+                'error': f"An error occurred: {str(e)}",
+                'trace': traceback.format_exc()
+            }), 500
+        else:
+            # In production, send a generic error
+            return jsonify({'error': "An unexpected error occurred. Please try again later."}), 500
 
 # Dashboard route to view upload history
 @app.route('/dashboard')
