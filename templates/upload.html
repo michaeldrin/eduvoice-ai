@@ -57,6 +57,24 @@
                                 <input class="form-control" type="file" id="file" name="file" required>
                                 <div class="form-text">Only PDF and DOCX files are allowed</div>
                             </div>
+                            <div class="mb-4">
+                                <label for="language" class="form-label">Document Language</label>
+                                <select class="form-select" id="language" name="language">
+                                    <option value="en" {% if user_settings.language == 'en' %}selected{% endif %}>English</option>
+                                    <option value="es" {% if user_settings.language == 'es' %}selected{% endif %}>Spanish (Español)</option>
+                                    <option value="fr" {% if user_settings.language == 'fr' %}selected{% endif %}>French (Français)</option>
+                                    <option value="de" {% if user_settings.language == 'de' %}selected{% endif %}>German (Deutsch)</option>
+                                    <option value="it" {% if user_settings.language == 'it' %}selected{% endif %}>Italian (Italiano)</option>
+                                    <option value="pt" {% if user_settings.language == 'pt' %}selected{% endif %}>Portuguese (Português)</option>
+                                    <option value="ru" {% if user_settings.language == 'ru' %}selected{% endif %}>Russian (Русский)</option>
+                                    <option value="zh" {% if user_settings.language == 'zh' %}selected{% endif %}>Chinese (中文)</option>
+                                    <option value="ja" {% if user_settings.language == 'ja' %}selected{% endif %}>Japanese (日本語)</option>
+                                    <option value="ko" {% if user_settings.language == 'ko' %}selected{% endif %}>Korean (한국어)</option>
+                                    <option value="ar" {% if user_settings.language == 'ar' %}selected{% endif %}>Arabic (العربية)</option>
+                                    <option value="hi" {% if user_settings.language == 'hi' %}selected{% endif %}>Hindi (हिन्दी)</option>
+                                </select>
+                                <div class="form-text">Choose the language for document processing and interaction</div>
+                            </div>
                             <div class="d-grid gap-2">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bi bi-cloud-arrow-up"></i> Upload & Extract Text

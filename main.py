@@ -1140,6 +1140,9 @@ def upload_file():
                 
             file = request.files['file']
             
+            # Get the selected language from the form
+            language = request.form.get('language', 'en')
+            
             # If user does not select file, browser also
             # submit an empty part without filename
             if file.filename == '':
@@ -1435,6 +1438,7 @@ def summarize_text():
             text_filename=text_filename,
             audio_filename=audio_file,
             upload_time=datetime.datetime.now(),
+            language=language,  # Set the document language from form
             auto_processed=True  # Mark as processed since we're doing it here
         )
         db.session.add(document)
@@ -1584,6 +1588,80 @@ def download_audio(filename):
         as_attachment=True,
         download_name=filename
     )
+
+# Translate document summary
+@app.route('/document/<int:document_id>/translate', methods=['POST'])
+@login_required
+def translate_document_summary(document_id):
+    """
+    Translate a document summary to a target language
+    """
+    try:
+        logger.info(f"Translation request for document ID: {document_id}")
+        
+        # Get the document
+        document = Document.query.get_or_404(document_id)
+        
+        # Security check: make sure the current user owns this document
+        current_user_id = None
+        if 'user' in session:
+            current_user_id = session['user'].get('email')
+        else:
+            current_user_id = session.get('session_id', '')
+            
+        if document.user_id != current_user_id:
+            logger.warning(f"Unauthorized translation attempt for document {document_id} by {current_user_id}")
+            return jsonify({'error': "You don't have permission to translate this document."}), 403
+        
+        # Get the target language from the request
+        data = request.get_json()
+        if not data or 'target_language' not in data:
+            return jsonify({'error': "Missing target language"}), 400
+            
+        target_language = data['target_language']
+        
+        # Validate target language
+        valid_languages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 'ar', 'hi']
+        if target_language not in valid_languages:
+            return jsonify({'error': "Invalid target language"}), 400
+            
+        # Check if the document has a summary
+        if not document.summary:
+            return jsonify({'error': "No summary available to translate"}), 400
+            
+        # If target language is the same as document language, return the current summary
+        if target_language == document.language:
+            return jsonify({
+                'translated_summary': document.summary,
+                'language': document.language
+            })
+            
+        # If the document already has a translated summary in this language, return it
+        if document.language != target_language and document.translated_summary and target_language == document.language:
+            return jsonify({
+                'translated_summary': document.translated_summary,
+                'language': target_language
+            })
+            
+        # Translate the summary
+        translated_summary, error = translate_text(document.summary, target_language, document.language)
+        
+        if error:
+            logger.error(f"Translation error: {error}")
+            return jsonify({'error': f"Translation failed: {error}"}), 500
+            
+        # Update the document with the translated summary
+        document.translated_summary = translated_summary
+        db.session.commit()
+        
+        return jsonify({
+            'translated_summary': translated_summary,
+            'language': target_language
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error translating document summary: {e}")
+        return jsonify({'error': f"Translation error: {str(e)}"}), 500
 
 # Document chat page
 @app.route('/document/<int:document_id>/chat')
