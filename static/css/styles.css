@@ -1,0 +1,20 @@
+/* Custom styles (minimal as we're primarily using Bootstrap) */
+body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+}
+
+.card {
+    border-radius: 10px;
+    transition: transform 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+/* Ensure proper contrast in the dark theme */
+.text-muted {
+    color: rgba(255, 255, 255, 0.6) !important;
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <!-- Use Replit-themed Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-body text-center p-5">
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">
+                                {{ error }}
+                            </div>
+                        {% endif %}
+                        
+                        <h1 class="display-4 mb-4">Welcome to Flask with Jinja2</h1>
+                        <p class="lead">This is a simple Flask application with Jinja2 templating.</p>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="mt-4">
+                            <p>Features included:</p>
+                            <ul class="list-group list-group-flush text-start mb-4">
+                                <li class="list-group-item">Flask framework for the backend</li>
+                                <li class="list-group-item">Jinja2 templating for HTML rendering</li>
+                                <li class="list-group-item">Gunicorn WSGI server for running the application</li>
+                                <li class="list-group-item">Bootstrap for responsive styling</li>
+                            </ul>
+                        </div>
+                        
+                        <a href="/" class="btn btn-secondary mt-3">
+                            Refresh Page
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
