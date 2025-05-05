@@ -1,5 +1,8 @@
 import logging
-from flask import Flask, render_template, request, send_from_directory
+import os
+import datetime
+from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -7,6 +10,18 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app instance
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'docx'}
+app.secret_key = 'your-secret-key'  # Needed for flash messages
+
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Helper function to check allowed file extensions
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 # Define routes
 @app.route("/")
@@ -20,6 +35,75 @@ def home_page():
         title="Flask with Jinja2",
         request=request
     )
+
+@app.route('/upload', methods=['GET', 'POST'])
+def upload_file():
+    """
+    Route to handle file uploads
+    """
+    if request.method == 'POST':
+        logger.debug("Processing file upload")
+        
+        # Check if the post request has the file part
+        if 'file' not in request.files:
+            logger.error("No file part in the request")
+            return render_template(
+                "upload.html", 
+                title="File Upload",
+                error="No file selected"
+            )
+            
+        file = request.files['file']
+        
+        # If user does not select file, browser also
+        # submit an empty part without filename
+        if file.filename == '':
+            logger.error("No file selected")
+            return render_template(
+                "upload.html", 
+                title="File Upload",
+                error="No file selected"
+            )
+            
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            
+            # Get file details for the success page
+            file_size = os.path.getsize(file_path)
+            readable_size = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
+            file_type = filename.rsplit('.', 1)[1].upper()
+            upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            logger.info(f"File uploaded successfully: {filename}")
+            
+            return render_template(
+                "upload_success.html",
+                title="Upload Successful",
+                filename=filename,
+                filetype=file_type,
+                filesize=readable_size,
+                upload_time=upload_time
+            )
+        else:
+            logger.error("Invalid file type")
+            return render_template(
+                "upload.html", 
+                title="File Upload",
+                error="Only PDF and DOCX files are allowed"
+            )
+    
+    # GET request - show upload form
+    return render_template(
+        "upload.html", 
+        title="File Upload"
+    )
+
+# Add upload link to the homepage
+@app.context_processor
+def inject_upload_url():
+    return {'upload_url': url_for('upload_file')}
 
 # Serve static files
 @app.route('/static/<path:path>')
