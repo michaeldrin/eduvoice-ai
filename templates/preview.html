@@ -58,6 +58,22 @@
                         
                         <hr class="my-4">
                         
+                        <form action="/summarize" method="POST" class="mb-4">
+                            <input type="hidden" name="filename" value="{{ filename }}">
+                            <input type="hidden" name="filetype" value="{{ filetype }}">
+                            <input type="hidden" name="extracted_text" value="{{ extracted_text }}">
+                            <input type="hidden" name="total_length" value="{{ total_length }}">
+                            {% if truncated %}
+                            <input type="hidden" name="truncated" value="true">
+                            {% endif %}
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-success mb-3">
+                                    <i class="bi bi-robot"></i> Generate Summary with AI
+                                </button>
+                                <small class="text-muted text-center mb-3">Uses OpenAI's API to create a concise summary</small>
+                            </div>
+                        </form>
+                        
                         <div class="d-flex justify-content-between mt-3">
                             <a href="/upload" class="btn btn-primary">Upload Another File</a>
                             <a href="/" class="btn btn-secondary">Back to Home</a>

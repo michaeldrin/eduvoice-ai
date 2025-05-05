@@ -5,6 +5,7 @@ import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
+from openai import OpenAI
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -57,6 +58,62 @@ def extract_text_from_docx(file_path):
     except Exception as e:
         logger.error(f"Error extracting text from DOCX: {e}")
         raise
+
+# Helper function to generate summary from text using OpenAI
+def generate_summary(text):
+    """
+    Generate a summary of the provided text using OpenAI API
+    """
+    try:
+        # Check if the text is empty
+        if not text or len(text.strip()) == 0:
+            logger.error("Empty text provided for summarization")
+            return None, "Cannot summarize empty text."
+            
+        # If the text is too long, truncate it to avoid token limits
+        # Most models have a token limit of around 4000-8000 tokens, which is roughly 3000-6000 words
+        # For safety, we'll limit to approximately 12000 characters (about 2000-3000 words)
+        max_text_length = 12000
+        truncated_for_api = False
+        if len(text) > max_text_length:
+            text = text[:max_text_length]
+            truncated_for_api = True
+            logger.info(f"Text truncated for API call (length: {len(text)})")
+        
+        # Set up the OpenAI client with API key from environment variable
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+            
+        client = OpenAI(api_key=openai_api_key)
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        prompt = f"Summarize the following text in simple English:\n\n{text}"
+        
+        # Call the OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that summarizes text clearly and concisely."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500
+        )
+        
+        # Extract the summary from the response
+        summary = response.choices[0].message.content
+        
+        # Return the summary
+        if truncated_for_api:
+            summary += "\n\n(Note: The original text was truncated due to length constraints before summarization.)"
+            
+        return summary, None
+        
+    except Exception as e:
+        logger.error(f"Error generating summary with OpenAI: {e}")
+        return None, f"Error generating summary: {str(e)}"
 
 # Define routes
 @app.route("/")
@@ -167,6 +224,63 @@ def upload_file():
     return render_template(
         "upload.html", 
         title="File Upload"
+    )
+
+# Route for text summarization using OpenAI
+@app.route('/summarize', methods=['POST'])
+def summarize_text():
+    """
+    Route to handle text summarization requests
+    """
+    logger.debug("Processing summarization request")
+    
+    # Get form data
+    filename = request.form.get('filename', 'Unknown File')
+    filetype = request.form.get('filetype', 'Unknown Type')
+    extracted_text = request.form.get('extracted_text', '')
+    total_length = request.form.get('total_length', 0)
+    try:
+        total_length = int(total_length)
+    except ValueError:
+        total_length = len(extracted_text)
+    
+    truncated = request.form.get('truncated') == 'true'
+    
+    # Check if we have text to summarize
+    if not extracted_text or len(extracted_text.strip()) == 0:
+        logger.error("No text provided for summarization")
+        return render_template(
+            "upload.html",
+            title="File Upload",
+            error="No text to summarize. Please upload a file with content."
+        )
+    
+    # Generate summary
+    summary, error = generate_summary(extracted_text)
+    
+    if error:
+        logger.error(f"Error in summarization: {error}")
+        return render_template(
+            "preview.html",
+            title="Text Preview",
+            filename=filename,
+            filetype=filetype,
+            extracted_text=extracted_text,
+            total_length=total_length,
+            truncated=truncated,
+            error=f"Failed to generate summary: {error}"
+        )
+    
+    # Render summary template
+    return render_template(
+        "summary.html",
+        title="Document Summary",
+        filename=filename,
+        filetype=filetype,
+        extracted_text=extracted_text,
+        total_length=total_length,
+        truncated=truncated,
+        summary=summary
     )
 
 # Add upload link to the homepage
