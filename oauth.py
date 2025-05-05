@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 from flask import Blueprint, redirect, url_for, session, current_app, request, render_template
 from authlib.integrations.flask_client import OAuth
 
@@ -28,8 +29,17 @@ def init_oauth(app):
 @auth_bp.route('/login')
 def login():
     """Redirect to Google for OAuth login"""
-    # Generate a random state for security
-    redirect_uri = url_for('auth.callback', _external=True)
+    # Get the Replit domain from environment variables
+    replit_domain = os.environ.get('REPLIT_DEV_DOMAIN')
+    if replit_domain:
+        # Force the HTTPS protocol for the redirect URI
+        redirect_uri = f"https://{replit_domain}/callback"
+        current_app.logger.info(f"Using Replit redirect URI: {redirect_uri}")
+    else:
+        # Fallback to default url_for behavior
+        redirect_uri = url_for('auth.callback', _external=True)
+        current_app.logger.info(f"Using standard redirect URI: {redirect_uri}")
+    
     return oauth.google.authorize_redirect(redirect_uri)
 
 
@@ -37,24 +47,30 @@ def login():
 def callback():
     """Callback endpoint for Google OAuth"""
     try:
+        # Detailed logging for debugging
+        current_app.logger.info(f"Callback received: {request.url}")
+        
         # Get the token
         token = oauth.google.authorize_access_token()
+        current_app.logger.info("Token retrieved successfully")
         
-        # Get user info
-        user_info = token.get('userinfo')
-        if user_info:
+        # Get user info from token
+        resp = oauth.google.get('https://openidconnect.googleapis.com/v1/userinfo')
+        user_info = resp.json()
+        
+        if user_info and 'email' in user_info:
             # Store user info in session
             session['user'] = {
                 'id': user_info.get('sub'),
                 'email': user_info.get('email'),
-                'name': user_info.get('name'),
-                'picture': user_info.get('picture'),
-                'logged_in_at': json.dumps(dict(token.get('expires_at')))
+                'name': user_info.get('name', user_info.get('email')),
+                'picture': user_info.get('picture', ''),
+                'logged_in_at': datetime.datetime.now().isoformat()
             }
             
             current_app.logger.info(f"User logged in: {user_info.get('email')}")
         else:
-            current_app.logger.error("Failed to get user info from token")
+            current_app.logger.error(f"Failed to get user info: {user_info}")
             return redirect(url_for('home_page', error="Failed to get user info"))
         
         return redirect(url_for('home_page'))
@@ -97,6 +113,11 @@ def profile():
         theme_mode=user_settings.theme_mode
     )
 
+
+# Method to be called from the root-level callback route
+def handle_google_callback():
+    """Method to handle Google OAuth callback from root level"""
+    return callback()
 
 # Decorator to require login for routes
 def login_required(view_func):

@@ -53,6 +53,26 @@ init_oauth(app)
 # Register the auth blueprint
 app.register_blueprint(auth_bp)
 
+# Register the callback route at the root level for Google OAuth
+@app.route('/callback')
+def oauth_callback():
+    """Route to handle Google OAuth callback at root level"""
+    return auth_bp.handle_google_callback()
+    
+# Register context processor to make user info available in all templates
+@app.context_processor
+def inject_global_variables():
+    """
+    Make common variables available to all templates
+    """
+    user_logged_in = 'user' in session
+    google_user = session.get('user', {}) if user_logged_in else {}
+    
+    return {
+        'is_logged_in': user_logged_in,
+        'google_user': google_user
+    }
+
 # Create all database tables
 with app.app_context():
     db.create_all()
