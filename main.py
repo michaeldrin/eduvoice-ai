@@ -5,9 +5,10 @@ import uuid
 import fitz  # PyMuPDF
 import docx
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
+from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify
 from openai import OpenAI
 from gtts import gTTS
+from models import db, Document
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -19,7 +20,22 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'docx'}
 app.config['PREVIEW_TEXT_MAX_LENGTH'] = 10000  # Limit preview text for large documents
-app.secret_key = 'your-secret-key'  # Needed for flash messages
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-secret-key")
+
+# Configure the database with PostgreSQL
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+
+# Initialize the database with the app
+db.init_app(app)
+
+# Create all database tables
+with app.app_context():
+    db.create_all()
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -365,6 +381,23 @@ def summarize_text():
             logger.error(f"Error in text-to-speech conversion: {audio_error}")
             # We'll continue without audio if there's an error, but we'll include the error message
     
+    # Save to database
+    try:
+        document = Document(
+            filename=filename,
+            filetype=filetype,
+            summary=summary,
+            text_filename=text_filename,
+            audio_filename=audio_file,
+            upload_time=datetime.datetime.now()
+        )
+        db.session.add(document)
+        db.session.commit()
+        logger.info(f"Document record saved to database: {filename}")
+    except Exception as e:
+        logger.error(f"Error saving document to database: {e}")
+        # Continue anyway - don't let database issues prevent summary display
+    
     # Render summary template with the audio file and summary text file if available
     return render_template(
         "summary.html",
@@ -425,6 +458,33 @@ def download_audio(filename):
         as_attachment=True,
         download_name=filename
     )
+
+# Dashboard route to view upload history
+@app.route('/dashboard')
+def dashboard():
+    """
+    Dashboard page displaying document upload history
+    """
+    logger.debug("Accessing dashboard route")
+    
+    try:
+        # Query all documents from the database, ordered by upload time (newest first)
+        documents = Document.query.order_by(Document.upload_time.desc()).all()
+        
+        # Render the dashboard template with the documents
+        return render_template(
+            "dashboard.html",
+            title="Upload History Dashboard",
+            documents=documents
+        )
+    except Exception as e:
+        logger.error(f"Error accessing dashboard: {e}")
+        return render_template(
+            "index.html",
+            title="Error",
+            error=f"Could not load dashboard: {str(e)}",
+            request=request
+        )
 
 # Error handling
 @app.errorhandler(404)
