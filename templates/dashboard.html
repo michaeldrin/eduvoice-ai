@@ -119,6 +119,11 @@
                                                            title="Chat with Document">
                                                             <i class="bi bi-chat-dots"></i>
                                                         </a>
+                                                        <a href="{{ url_for('document_questions', document_id=document.id) }}" 
+                                                           class="btn btn-sm btn-success" 
+                                                           title="Questions & Notes">
+                                                            <i class="bi bi-question-circle"></i>
+                                                        </a>
                                                     {% endif %}
                                                 </td>
                                             </tr>
