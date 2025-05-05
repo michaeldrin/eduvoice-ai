@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
 from openai import OpenAI
 from gtts import gTTS
-from models import db, Document, UserSettings
+from models import db, Document, UserSettings, ChatMessage
 from oauth import init_oauth, auth_bp, login_required
 
 # Set up logging for debugging
@@ -236,6 +236,195 @@ def extract_text_from_docx(file_path):
     except Exception as e:
         logger.exception(f"Unexpected error extracting text from DOCX: {e}")
         return None, f"Error processing DOCX file: {str(e)}"
+
+# Helper function to generate a chat response for document Q&A
+def generate_chat_response(document_id, user_message):
+    """
+    Generate a response to a user question about a document using OpenAI API
+    
+    Args:
+        document_id (int): The ID of the document to chat about
+        user_message (str): The user's question or message
+        
+    Returns:
+        tuple: (response_text, error_message)
+    """
+    try:
+        # Get the document from database
+        document = Document.query.get(document_id)
+        if not document or not document.text_content:
+            logger.error(f"Document not found or has no content: {document_id}")
+            return None, "Document not found or has no content to chat about."
+        
+        # Set up the OpenAI client with API key from environment variable
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+            
+        client = OpenAI(api_key=openai_api_key)
+        
+        # Get user settings for language preference
+        settings = get_user_settings()
+        language = settings.language
+        
+        # Map language codes to language names for the prompt
+        language_names = {
+            'en': 'English',
+            'fa': 'Farsi',
+            'de': 'German',
+            'fr': 'French',
+            'es': 'Spanish'
+        }
+        
+        # Default to English if language is not in our mapping
+        language_name = language_names.get(language, 'English')
+        
+        # Get all previous chat messages for context
+        chat_history = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        
+        # Create the system prompt
+        system_prompt = f"""You are an intelligent assistant that helps users understand the content of documents.
+        Respond in {language_name}.
+        The document content is provided below. Use it to answer the user's questions.
+        Be concise, accurate, and helpful. If you don't know the answer, say so.
+        
+        DOCUMENT CONTENT:
+        {document.text_content[:10000]}  # Limit to 10000 chars to avoid token limits
+        """
+        
+        # Build conversation history
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add chat history for context (up to the last 10 messages)
+        for message in chat_history[-10:]:
+            messages.append({
+                "role": "user" if message.message_type == "user" else "assistant",
+                "content": message.content
+            })
+        
+        # Add the current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=500
+        )
+        
+        # Extract the response text
+        response_text = response.choices[0].message.content
+        
+        # Save the user message and response to the database
+        user_chat_message = ChatMessage(
+            document_id=document_id,
+            user_id=session.get('user', {}).get('email', 'guest'),
+            message_type='user',
+            content=user_message
+        )
+        
+        assistant_chat_message = ChatMessage(
+            document_id=document_id,
+            user_id=session.get('user', {}).get('email', 'guest'),
+            message_type='assistant',
+            content=response_text
+        )
+        
+        db.session.add(user_chat_message)
+        db.session.add(assistant_chat_message)
+        db.session.commit()
+        
+        logger.info(f"Chat message generated for document {document_id}")
+        return response_text, None
+        
+    except Exception as e:
+        logger.exception(f"Error generating chat response: {e}")
+        return None, f"Error generating response: {str(e)}"
+
+# Helper function to generate an initial welcome message for document chat
+def generate_initial_chat_message(document):
+    """
+    Generate an initial welcome message for a document chat
+    
+    Args:
+        document (Document): The document to generate a welcome message for
+        
+    Returns:
+        str: The welcome message
+    """
+    try:
+        if not document or not document.text_content:
+            return None
+            
+        # Set up the OpenAI client with API key from environment variable
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None
+            
+        client = OpenAI(api_key=openai_api_key)
+        
+        # Get user settings for language preference
+        settings = get_user_settings()
+        language = settings.language
+        
+        # Map language codes to language names for the prompt
+        language_names = {
+            'en': 'English',
+            'fa': 'Farsi',
+            'de': 'German',
+            'fr': 'French',
+            'es': 'Spanish'
+        }
+        
+        # Default to English if language is not in our mapping
+        language_name = language_names.get(language, 'English')
+        
+        # Create the system prompt
+        system_prompt = f"""You are an intelligent assistant that helps users understand documents.
+        Respond in {language_name}.
+        You need to create a brief, friendly welcome message for a document chat.
+        Include 2-3 specific suggested questions the user could ask about this document.
+        
+        DOCUMENT SUMMARY:
+        Title: {document.filename}
+        Type: {document.filetype}
+        Content preview: {document.text_content[:2000] if document.text_content else "No text content available."}
+        """
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Please create a welcome message for this document chat."}
+            ],
+            max_tokens=350
+        )
+        
+        # Extract the response text
+        welcome_message = response.choices[0].message.content
+        
+        # Save the assistant message to the database
+        assistant_chat_message = ChatMessage(
+            document_id=document.id,
+            user_id=document.user_id or 'system',
+            message_type='assistant',
+            content=welcome_message
+        )
+        
+        db.session.add(assistant_chat_message)
+        db.session.commit()
+        
+        logger.info(f"Initial chat message generated for document {document.id}")
+        return welcome_message
+        
+    except Exception as e:
+        logger.exception(f"Error generating initial chat message: {e}")
+        return None
 
 # Helper function to generate summary from text using OpenAI
 def generate_summary(text):
