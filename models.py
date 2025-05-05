@@ -11,6 +11,7 @@ class ChatMessage(db.Model):
     message_type = db.Column(db.String(10), nullable=False)  # 'user' or 'assistant'
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    language = db.Column(db.String(10), default='en')  # Language of this message
     
     def __repr__(self):
         return f'<ChatMessage {self.id}: {self.message_type}>'
@@ -23,7 +24,8 @@ class ChatMessage(db.Model):
             'user_id': self.user_id,
             'message_type': self.message_type,
             'content': self.content,
-            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'language': self.language
         }
 
 class Document(db.Model):
@@ -39,6 +41,10 @@ class Document(db.Model):
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
     auto_processed = db.Column(db.Boolean, default=False)  # Flag to track if auto-processing was done
     
+    # Language support
+    language = db.Column(db.String(10), default='en')  # Default: English
+    translated_summary = db.Column(db.Text, nullable=True)  # Store the translated summary
+    
     # Relationship with chat messages
     chat_messages = db.relationship('ChatMessage', backref='document', lazy=True, cascade="all, delete-orphan")
     
@@ -53,11 +59,13 @@ class Document(db.Model):
             'filename': self.filename,
             'filetype': self.filetype,
             'summary': self.summary,
+            'translated_summary': self.translated_summary,
             'text_filename': self.text_filename,
             'audio_filename': self.audio_filename,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S'),
             'auto_processed': self.auto_processed,
-            'has_chat': self.text_content is not None
+            'has_chat': self.text_content is not None,
+            'language': self.language
         }
 
 class UserSettings(db.Model):

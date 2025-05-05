@@ -191,6 +191,76 @@ def extract_text_from_pdf(file_path):
         return None, f"Error processing PDF file: {str(e)}"
 
 # Helper function to validate OpenAI API key and handle errors
+def translate_text(text, target_language, source_language='en'):
+    """
+    Translate text to target language using OpenAI
+    
+    Args:
+        text (str): Text to translate
+        target_language (str): Target language code (e.g., 'es', 'fr', 'de')
+        source_language (str, optional): Source language code. Defaults to 'en'.
+        
+    Returns:
+        tuple: (translated_text, error_message)
+    """
+    if not text:
+        return None, "No text provided for translation"
+        
+    # Get language names
+    language_names = {
+        'en': 'English',
+        'es': 'Spanish',
+        'fr': 'French',
+        'de': 'German',
+        'it': 'Italian',
+        'pt': 'Portuguese',
+        'ru': 'Russian',
+        'zh': 'Chinese',
+        'ja': 'Japanese',
+        'ko': 'Korean'
+    }
+    
+    target_language_name = language_names.get(target_language, target_language)
+    source_language_name = language_names.get(source_language, source_language)
+    
+    # Skip translation if source and target are the same
+    if target_language == source_language:
+        return text, None
+    
+    # Get OpenAI client
+    client, error = validate_openai_api()
+    if error:
+        return None, f"API Error: {error}"
+    
+    try:
+        logger.info(f"Translating text from {source_language_name} to {target_language_name}")
+        
+        # Build system message
+        system_message = f"You are a professional translator. Translate the following text from {source_language_name} to {target_language_name}. Preserve formatting, maintain the same tone, and ensure accuracy."
+        
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": text}
+            ],
+            max_tokens=1500,
+            temperature=0.1,  # Lower temperature for more deterministic output
+            timeout=30  # Add timeout to prevent long-running requests
+        )
+        
+        translated_text = response.choices[0].message.content.strip()
+        logger.info(f"Translation completed successfully")
+        
+        return translated_text, None
+        
+    except Exception as e:
+        error_message = handle_openai_error(e)
+        logger.error(f"Translation error: {error_message}")
+        return None, f"Translation error: {error_message}"
+
 def validate_openai_api(api_key=None):
     """
     Validate OpenAI API key and handle common errors
@@ -360,25 +430,33 @@ def generate_chat_response(document_id, user_message):
                 return None, error_details
             return None, error
             
-        # Get user settings for language preference
+        # Get document and user language preference
         try:
-            settings = get_user_settings()
-            language = settings.language
+            # First try to use the document language
+            language = document.language
+            
+            # If not set, fall back to user settings
+            if not language:
+                settings = get_user_settings()
+                language = settings.language
         except Exception as settings_error:
-            logger.error(f"Error retrieving user settings: {settings_error}")
+            logger.error(f"Error retrieving language settings: {settings_error}")
             language = 'en'  # Default to English on error
         
         # Map language codes to language names for the prompt
         language_names = {
             'en': 'English',
-            'fa': 'Farsi',
-            'de': 'German',
-            'fr': 'French',
             'es': 'Spanish',
+            'fr': 'French',
+            'de': 'German',
             'it': 'Italian',
+            'pt': 'Portuguese',
+            'ru': 'Russian',
+            'zh': 'Chinese',
+            'ja': 'Japanese',
+            'ko': 'Korean',
             'ar': 'Arabic',
-            'zh-CN': 'Chinese',
-            'ja': 'Japanese'
+            'hi': 'Hindi'
         }
         
         # Default to English if language is not in our mapping
