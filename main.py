@@ -9,6 +9,7 @@ from flask import Flask, render_template, request, send_from_directory, redirect
 from openai import OpenAI
 from gtts import gTTS
 from models import db, Document, UserSettings
+from oauth import init_oauth, auth_bp, login_required
 
 # Set up logging for debugging
 log_file_path = os.path.join('logs', 'app.log')
@@ -45,6 +46,12 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Initialize the database with the app
 db.init_app(app)
+
+# Initialize OAuth with the app
+init_oauth(app)
+
+# Register the auth blueprint
+app.register_blueprint(auth_bp)
 
 # Create all database tables
 with app.app_context():
@@ -239,16 +246,21 @@ def generate_summary(text):
 # Helper function to get or create user settings
 def get_user_settings():
     """
-    Get or create user settings for the current session
+    Get or create user settings for the current session or user
     
     Returns:
-        UserSettings: The user settings for the current session
+        UserSettings: The user settings for the current session/user
     """
-    # Generate a session_id if not present
-    if 'session_id' not in session:
-        session['session_id'] = uuid.uuid4().hex
-    
-    session_id = session['session_id']
+    # If user is logged in via Google OAuth, use email as session_id
+    if 'user' in session and 'email' in session['user']:
+        session_id = session['user']['email']
+        logger.debug(f"Using Google email as session ID: {session_id}")
+    else:
+        # Generate a session_id if not present
+        if 'session_id' not in session:
+            session['session_id'] = uuid.uuid4().hex
+        
+        session_id = session['session_id']
     
     # Try to find existing settings
     settings = UserSettings.query.filter_by(session_id=session_id).first()
@@ -258,7 +270,7 @@ def get_user_settings():
         settings = UserSettings(session_id=session_id)
         db.session.add(settings)
         db.session.commit()
-        logger.info(f"Created new user settings for session: {session_id}")
+        logger.info(f"Created new user settings for session/user: {session_id}")
     
     return settings
 
@@ -344,9 +356,10 @@ def home_page():
     )
 
 @app.route('/upload', methods=['GET', 'POST'])
+@login_required
 def upload_file():
     """
-    Route to handle file uploads
+    Route to handle file uploads (requires login)
     """
     # Get the current user settings
     user_settings = get_user_settings()
@@ -480,9 +493,10 @@ def upload_file():
 
 # Route for text summarization using OpenAI
 @app.route('/summarize', methods=['POST'])
+@login_required
 def summarize_text():
     """
-    Route to handle text summarization requests
+    Route to handle text summarization requests (requires login)
     """
     logger.debug("Processing summarization request")
     
@@ -646,11 +660,16 @@ def inject_global_variables():
     except Exception as e:
         logger.warning(f"Error getting user settings for template: {e}")
         user_settings = None
-        
+    
+    # Check if user is logged in via Google OAuth
+    google_user = session.get('user', None)
+    
     return {
         'upload_url': url_for('upload_file'),
         'user_settings': user_settings,
-        'theme_mode': user_settings.theme_mode if user_settings else 'dark'
+        'theme_mode': user_settings.theme_mode if user_settings else 'dark',
+        'google_user': google_user,
+        'is_logged_in': google_user is not None
     }
 
 # Serve static files
@@ -696,9 +715,10 @@ def download_audio(filename):
 
 # Dashboard route to view upload history
 @app.route('/dashboard')
+@login_required
 def dashboard():
     """
-    Dashboard page displaying document upload history
+    Dashboard page displaying document upload history (requires login)
     """
     logger.debug("Accessing dashboard route")
     
@@ -738,9 +758,10 @@ def dashboard():
 
 # Settings route to customize user preferences
 @app.route('/settings', methods=['GET', 'POST'])
+@login_required
 def settings():
     """
-    Settings page for user preferences
+    Settings page for user preferences (requires login)
     """
     logger.debug("Accessing settings route")
     
