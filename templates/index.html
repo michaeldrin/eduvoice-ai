@@ -99,6 +99,32 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/settings"><i class="bi bi-gear-fill me-1"></i> Settings</a>
                     </li>
+                    
+                    {% if is_logged_in %}
+                    <!-- User is logged in -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            {% if google_user.picture %}
+                            <img src="{{ google_user.picture }}" alt="Profile" class="rounded-circle me-2" width="24" height="24">
+                            {% else %}
+                            <i class="bi bi-person-circle me-2"></i>
+                            {% endif %}
+                            {{ google_user.name if google_user.name else google_user.email }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <!-- User is not logged in -->
+                    <li class="nav-item">
+                        <a class="nav-link btn btn-outline-primary btn-sm px-3 py-2 ms-2" href="/login">
+                            <i class="bi bi-google me-2"></i>Login with Google
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -128,9 +154,18 @@
                     {% include 'usage_stats.html' %}
                     
                     <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+                        {% if is_logged_in %}
                         <a href="/upload" class="btn btn-primary btn-lg get-started-btn">
                             <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
                         </a>
+                        {% else %}
+                        <a href="/login" class="btn btn-primary btn-lg get-started-btn">
+                            <i class="bi bi-google me-2"></i>Login with Google
+                        </a>
+                        <a href="/upload" class="btn btn-outline-secondary btn-lg">
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Continue as Guest
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
