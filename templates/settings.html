@@ -305,31 +305,19 @@
     <!-- Accessibility JS -->
     <script src="{{ url_for('static', filename='js/accessibility.js') }}"></script>
     
-    <!-- Accessibility Script -->
-    <script src="{{ url_for('static', filename='js/accessibility.js') }}"></script>
-    
-    <!-- Theme and Accessibility Preview Script -->
+    <!-- Settings Page Script -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Get the theme selector
             const themeSelector = document.getElementById('theme_mode');
             
             // Add change event listener to preview theme changes
-            themeSelector.addEventListener('change', function() {
-                // Update the data-bs-theme attribute on the html element
-                document.documentElement.setAttribute('data-bs-theme', this.value);
-            });
-            
-            // Create Reading Ruler
-            const createReadingRuler = () => {
-                let ruler = document.querySelector('.reading-ruler');
-                if (!ruler) {
-                    ruler = document.createElement('div');
-                    ruler.className = 'reading-ruler';
-                    document.body.appendChild(ruler);
-                }
-                return ruler;
-            };
+            if (themeSelector) {
+                themeSelector.addEventListener('change', function() {
+                    // Update the data-bs-theme attribute on the html element
+                    document.documentElement.setAttribute('data-bs-theme', this.value);
+                });
+            }
             
             // Font size preview functionality
             const fontSizeSelect = document.getElementById('font_size');
@@ -351,9 +339,6 @@
                 fontSizeSelect.addEventListener('change', updateFontSizePreview);
             }
             
-            // Create reading ruler
-            const ruler = createReadingRuler();
-            
             // Reading ruler functionality
             const readingRulerToggle = document.getElementById('reading_ruler_toggle');
             if (readingRulerToggle) {
@@ -361,110 +346,92 @@
                     if (this.checked) {
                         // Enable reading ruler
                         document.body.classList.add('show-reading-ruler');
-                        document.addEventListener('mousemove', updateRulerPosition);
+                        initReadingRuler();
                     } else {
                         // Disable reading ruler
                         document.body.classList.remove('show-reading-ruler');
-                        document.removeEventListener('mousemove', updateRulerPosition);
+                        disableReadingRuler();
                     }
                 });
-                
-                // Update ruler position on mouse move
-                function updateRulerPosition(e) {
-                    ruler.style.top = (e.clientY - 15) + 'px';
-                }
             }
             
             // Live preview functionality for accessibility options
             const accessibilityToggle = document.getElementById('accessibility_mode');
             const highContrastToggle = document.getElementById('high_contrast');
-            const dyslexiaFontToggle = document.getElementById('dyslexia_friendly');
+            const dyslexiaToggle = document.getElementById('dyslexia_friendly');
             const lineSpacingSelect = document.getElementById('line_spacing');
             const reduceAnimationsToggle = document.getElementById('reduce_animations');
             
-            // Apply live preview for each setting
-            if (accessibilityToggle) {
-                accessibilityToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        document.body.classList.add('accessibility-enabled');
+            // Function to update live preview
+            function updateLivePreview() {
+                const body = document.body;
+                
+                // Apply accessibility mode class
+                if (accessibilityToggle && accessibilityToggle.checked) {
+                    body.classList.add('accessibility-enabled');
+                } else {
+                    body.classList.remove('accessibility-enabled');
+                    return; // Don't apply other settings if accessibility mode is off
+                }
+                
+                // Apply high contrast
+                if (highContrastToggle && highContrastToggle.checked) {
+                    body.classList.add('high-contrast');
+                } else {
+                    body.classList.remove('high-contrast');
+                }
+                
+                // Apply dyslexia-friendly font
+                if (dyslexiaToggle && dyslexiaToggle.checked) {
+                    body.classList.add('dyslexia-friendly');
+                } else {
+                    body.classList.remove('dyslexia-friendly');
+                }
+                
+                // Apply line spacing
+                body.classList.remove('line-spacing-normal', 'line-spacing-increased', 'line-spacing-double');
+                if (lineSpacingSelect) {
+                    const spacing = lineSpacingSelect.value;
+                    if (spacing === '1.5') {
+                        body.classList.add('line-spacing-normal');
+                    } else if (spacing === '2.0') {
+                        body.classList.add('line-spacing-increased');
                     } else {
-                        document.body.classList.remove('accessibility-enabled');
+                        body.classList.add('line-spacing-double');
                     }
-                });
-            }
-            
-            if (highContrastToggle) {
-                highContrastToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        document.body.classList.add('high-contrast');
-                    } else {
-                        document.body.classList.remove('high-contrast');
-                    }
-                });
-            }
-            
-            if (dyslexiaFontToggle) {
-                dyslexiaFontToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        document.body.classList.add('dyslexia-friendly');
-                    } else {
-                        document.body.classList.remove('dyslexia-friendly');
-                    }
-                });
-            }
-            
-            if (lineSpacingSelect) {
-                lineSpacingSelect.addEventListener('change', function() {
-                    // Remove all line spacing classes
-                    document.body.classList.remove('line-spacing-normal', 'line-spacing-increased', 'line-spacing-double');
-                    
-                    // Add the selected line spacing class
-                    if (this.value === '1.5') {
-                        document.body.classList.add('line-spacing-normal');
-                    } else if (this.value === '2.0') {
-                        document.body.classList.add('line-spacing-increased');
-                    } else if (this.value === '2.5') {
-                        document.body.classList.add('line-spacing-double');
-                    }
-                });
-            }
-            
-            if (reduceAnimationsToggle) {
-                reduceAnimationsToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        document.body.classList.add('reduce-animations');
-                    } else {
-                        document.body.classList.remove('reduce-animations');
-                    }
-                });
-            }
-            
-            // Initialize all settings on page load
-            if (accessibilityToggle && accessibilityToggle.checked) {
-                document.body.classList.add('accessibility-enabled');
-            }
-            
-            if (highContrastToggle && highContrastToggle.checked) {
-                document.body.classList.add('high-contrast');
-            }
-            
-            if (dyslexiaFontToggle && dyslexiaFontToggle.checked) {
-                document.body.classList.add('dyslexia-friendly');
-            }
-            
-            if (lineSpacingSelect) {
-                if (lineSpacingSelect.value === '1.5') {
-                    document.body.classList.add('line-spacing-normal');
-                } else if (lineSpacingSelect.value === '2.0') {
-                    document.body.classList.add('line-spacing-increased');
-                } else if (lineSpacingSelect.value === '2.5') {
-                    document.body.classList.add('line-spacing-double');
+                }
+                
+                // Apply reduce animations
+                if (reduceAnimationsToggle && reduceAnimationsToggle.checked) {
+                    body.classList.add('reduce-animations');
+                } else {
+                    body.classList.remove('reduce-animations');
                 }
             }
             
-            if (reduceAnimationsToggle && reduceAnimationsToggle.checked) {
-                document.body.classList.add('reduce-animations');
+            // Add event listeners to update live preview
+            if (accessibilityToggle) {
+                accessibilityToggle.addEventListener('change', updateLivePreview);
             }
+            
+            if (highContrastToggle) {
+                highContrastToggle.addEventListener('change', updateLivePreview);
+            }
+            
+            if (dyslexiaToggle) {
+                dyslexiaToggle.addEventListener('change', updateLivePreview);
+            }
+            
+            if (lineSpacingSelect) {
+                lineSpacingSelect.addEventListener('change', updateLivePreview);
+            }
+            
+            if (reduceAnimationsToggle) {
+                reduceAnimationsToggle.addEventListener('change', updateLivePreview);
+            }
+            
+            // Initialize all settings on page load
+            updateLivePreview();
         });
     </script>
 </body>
