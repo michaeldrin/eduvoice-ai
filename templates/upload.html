@@ -58,8 +58,8 @@
                                 <div class="form-text">Only PDF and DOCX files are allowed</div>
                             </div>
                             <div class="mb-4">
-                                <label for="language" class="form-label">Document Language</label>
-                                <select class="form-select" id="language" name="language">
+                                <label for="document_language" class="form-label">Document Language</label>
+                                <select class="form-select" id="document_language" name="document_language">
                                     <option value="en" {% if user_settings.language == 'en' %}selected{% endif %}>English</option>
                                     <option value="es" {% if user_settings.language == 'es' %}selected{% endif %}>Spanish (Español)</option>
                                     <option value="fr" {% if user_settings.language == 'fr' %}selected{% endif %}>French (Français)</option>
@@ -73,7 +73,7 @@
                                     <option value="ar" {% if user_settings.language == 'ar' %}selected{% endif %}>Arabic (العربية)</option>
                                     <option value="hi" {% if user_settings.language == 'hi' %}selected{% endif %}>Hindi (हिन्दी)</option>
                                 </select>
-                                <div class="form-text">Choose the language for document processing and interaction</div>
+                                <div class="form-text">Select the original language of your document (will affect summarization and translation)</div>
                             </div>
                             <div class="d-grid gap-2">
                                 <button type="submit" class="btn btn-primary">

@@ -912,8 +912,11 @@ def auto_process_document(document):
         # Generate summary if not already done
         if not document.summary:
             try:
-                logger.info(f"Generating summary for document {document.id}")
-                summary, error = generate_summary(document.text_content)
+                # Use the document's language for summary generation
+                document_language = document.language or 'en'
+                logger.info(f"Generating summary for document {document.id} in language: {document_language}")
+                summary, error = generate_summary(document.text_content, document_language)
+                
                 if error or not summary:
                     logger.error(f"Failed to generate summary: {error}")
                     # Continue with partial processing
@@ -934,7 +937,7 @@ def auto_process_document(document):
                             
                         document.text_filename = summary_filename
                         db.session.commit()  # Save progress incrementally
-                        logger.info(f"Summary file created: {summary_filename}")
+                        logger.info(f"Summary file created: {summary_filename} in language: {document_language}")
                     except Exception as file_error:
                         logger.exception(f"Error saving summary file: {file_error}")
                         # Continue with partial processing
@@ -1162,8 +1165,8 @@ def upload_file():
                 
             file = request.files['file']
             
-            # Get the selected language from the form
-            language = request.form.get('language', 'en')
+            # Get the selected language from the form (default to user's preference)
+            language = request.form.get('document_language', user_settings.language)
             
             # If user does not select file, browser also
             # submit an empty part without filename
@@ -1614,12 +1617,16 @@ def download_audio(filename):
 # Translate document summary
 @app.route('/document/<int:document_id>/translate', methods=['POST'])
 @login_required
-def translate_document_summary(document_id):
+def translate_document(document_id, translate_type='summary'):
     """
-    Translate a document summary to a target language
+    Translate a document's summary or full content to a target language
+    
+    Args:
+        document_id (int): The ID of the document to translate
+        translate_type (str): 'summary' or 'content' to specify what to translate
     """
     try:
-        logger.info(f"Translation request for document ID: {document_id}")
+        logger.info(f"Translation request for document ID: {document_id} ({translate_type})")
         
         # Get the document
         document = Document.query.get_or_404(document_id)
@@ -1647,43 +1654,100 @@ def translate_document_summary(document_id):
         if target_language not in valid_languages:
             return jsonify({'error': "Invalid target language"}), 400
             
-        # Check if the document has a summary
-        if not document.summary:
-            return jsonify({'error': "No summary available to translate"}), 400
+        # Check if source content exists based on translate_type
+        if translate_type == 'summary':
+            source_text = document.summary
+            if not source_text:
+                return jsonify({'error': "No summary available to translate"}), 400
+                
+            # If target language is the same as document language, return the current summary
+            if target_language == document.language:
+                return jsonify({
+                    'translated_text': document.summary,
+                    'language': document.language
+                })
+                
+            # If already translated to this language, return it
+            if document.translated_language == target_language and document.translated_summary:
+                return jsonify({
+                    'translated_text': document.translated_summary,
+                    'language': target_language
+                })
+        else:  # translate_type == 'content'
+            source_text = document.text_content
+            if not source_text:
+                return jsonify({'error': "No content available to translate"}), 400
+                
+            # If target language is the same as document language, return the current content
+            if target_language == document.language:
+                return jsonify({
+                    'translated_text': document.text_content,
+                    'language': document.language
+                })
+                
+            # If already translated to this language, return it
+            if document.translated_language == target_language and document.translated_content:
+                return jsonify({
+                    'translated_text': document.translated_content,
+                    'language': target_language
+                })
             
-        # If target language is the same as document language, return the current summary
-        if target_language == document.language:
-            return jsonify({
-                'translated_summary': document.summary,
-                'language': document.language
-            })
-            
-        # If the document already has a translated summary in this language, return it
-        if document.language != target_language and document.translated_summary and target_language == document.language:
-            return jsonify({
-                'translated_summary': document.translated_summary,
-                'language': target_language
-            })
-            
-        # Translate the summary
-        translated_summary, error = translate_text(document.summary, target_language, document.language)
+        # Translate the text
+        translated_text, error = translate_text(source_text, target_language, document.language)
         
         if error:
             logger.error(f"Translation error: {error}")
             return jsonify({'error': f"Translation failed: {error}"}), 500
             
-        # Update the document with the translated summary
-        document.translated_summary = translated_summary
+        # Update the document with the translated text
+        document.translated_language = target_language
+        
+        if translate_type == 'summary':
+            document.translated_summary = translated_text
+        else:  # translate_type == 'content'
+            document.translated_content = translated_text
+            
         db.session.commit()
         
+        # If document content was translated, also generate a summary in the target language
+        if translate_type == 'content' and not document.translated_summary:
+            try:
+                # Generate summary in the target language from the translated content
+                translated_summary, summary_error = generate_summary(translated_text, target_language)
+                
+                if not summary_error and translated_summary:
+                    document.translated_summary = translated_summary
+                    db.session.commit()
+                    logger.info(f"Generated summary in {target_language} for document {document_id}")
+            except Exception as summary_error:
+                logger.error(f"Error generating summary in translated language: {summary_error}")
+                # Continue without failing the translation
+        
         return jsonify({
-            'translated_summary': translated_summary,
+            'translated_text': translated_text,
             'language': target_language
         })
         
     except Exception as e:
-        logger.exception(f"Error translating document summary: {e}")
+        logger.exception(f"Error translating document {translate_type}: {e}")
         return jsonify({'error': f"Translation error: {str(e)}"}), 500
+
+# Separate routes for summary and content translation
+@app.route('/api/document/<int:document_id>/translate_summary', methods=['POST'])
+@login_required
+def translate_document_summary(document_id):
+    """
+    Translate a document summary to a target language
+    """
+    return translate_document(document_id, 'summary')
+
+@app.route('/api/document/<int:document_id>/translate_content', methods=['POST'])
+@login_required
+def translate_document_content(document_id):
+    """
+    Translate a document's full content to a target language
+    """
+    return translate_document(document_id, 'content')
 
 # Document chat page
 @app.route('/document/<int:document_id>/chat')

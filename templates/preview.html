@@ -79,6 +79,26 @@
                             {% if truncated %}
                             <input type="hidden" name="truncated" value="true">
                             {% endif %}
+                            
+                            <div class="mb-4">
+                                <label for="summary_language" class="form-label">Summarize in Language</label>
+                                <select class="form-select" id="summary_language" name="summary_language">
+                                    <option value="en" {% if language == 'en' or user_settings.language == 'en' %}selected{% endif %}>English</option>
+                                    <option value="es" {% if language == 'es' or user_settings.language == 'es' %}selected{% endif %}>Spanish (Español)</option>
+                                    <option value="fr" {% if language == 'fr' or user_settings.language == 'fr' %}selected{% endif %}>French (Français)</option>
+                                    <option value="de" {% if language == 'de' or user_settings.language == 'de' %}selected{% endif %}>German (Deutsch)</option>
+                                    <option value="it" {% if language == 'it' or user_settings.language == 'it' %}selected{% endif %}>Italian (Italiano)</option>
+                                    <option value="pt" {% if language == 'pt' or user_settings.language == 'pt' %}selected{% endif %}>Portuguese (Português)</option>
+                                    <option value="ru" {% if language == 'ru' or user_settings.language == 'ru' %}selected{% endif %}>Russian (Русский)</option>
+                                    <option value="zh" {% if language == 'zh' or user_settings.language == 'zh' %}selected{% endif %}>Chinese (中文)</option>
+                                    <option value="ja" {% if language == 'ja' or user_settings.language == 'ja' %}selected{% endif %}>Japanese (日本語)</option>
+                                    <option value="ko" {% if language == 'ko' or user_settings.language == 'ko' %}selected{% endif %}>Korean (한국어)</option>
+                                    <option value="ar" {% if language == 'ar' or user_settings.language == 'ar' %}selected{% endif %}>Arabic (العربية)</option>
+                                    <option value="hi" {% if language == 'hi' or user_settings.language == 'hi' %}selected{% endif %}>Hindi (हिन्दी)</option>
+                                </select>
+                                <div class="form-text">Choose the language for your AI-generated summary</div>
+                            </div>
+                            
                             <div class="d-grid">
                                 <button type="submit" class="btn btn-success mb-3">
                                     <i class="bi bi-robot"></i> Generate Summary with AI
