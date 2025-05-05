@@ -29,6 +29,15 @@
                             </div>
                         {% endif %}
                         
+                        <div class="alert alert-info mb-4">
+                            <h5 class="alert-heading">File Text Extraction</h5>
+                            <p>Upload PDF or DOCX files to extract and preview text content.</p>
+                            <ul>
+                                <li>PDF files will be processed using PyMuPDF</li>
+                                <li>DOCX files will be processed using python-docx</li>
+                            </ul>
+                        </div>
+                        
                         <form method="POST" enctype="multipart/form-data" class="mb-4">
                             <div class="mb-4">
                                 <label for="file" class="form-label">Select a file to upload</label>
@@ -36,7 +45,7 @@
                                 <div class="form-text">Only PDF and DOCX files are allowed</div>
                             </div>
                             <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary">Upload File</button>
+                                <button type="submit" class="btn btn-primary">Upload & Extract Text</button>
                             </div>
                         </form>
                         

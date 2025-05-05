@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <!-- Use Replit-themed Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .text-preview {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: var(--bs-dark);
+            border-radius: 6px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card shadow-sm">
+                    <div class="card-body p-5">
+                        <h1 class="display-5 mb-4 text-center">File Text Preview</h1>
+                        
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">
+                                {{ error }}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5>File: {{ filename }}</h5>
+                                <span class="badge bg-primary">{{ filetype }}</span>
+                            </div>
+
+                            {% if total_length %}
+                            <div class="text-muted mb-3">
+                                <small>Text length: {{ total_length }} characters</small>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="text-preview mb-4">{{ extracted_text }}</div>
+                            
+                            {% if truncated %}
+                            <div class="alert alert-warning mt-2" role="alert">
+                                <small>Note: The text is truncated for preview purposes. The full text has been extracted.</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="d-flex justify-content-between mt-3">
+                            <a href="/upload" class="btn btn-primary">Upload Another File</a>
+                            <a href="/" class="btn btn-secondary">Back to Home</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,6 +1,8 @@
 import logging
 import os
 import datetime
+import fitz  # PyMuPDF
+import docx
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash
 
@@ -13,6 +15,7 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'docx'}
+app.config['PREVIEW_TEXT_MAX_LENGTH'] = 10000  # Limit preview text for large documents
 app.secret_key = 'your-secret-key'  # Needed for flash messages
 
 # Ensure upload directory exists
@@ -22,6 +25,38 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Helper function to extract text from PDF files
+def extract_text_from_pdf(file_path):
+    """Extract text from PDF file using PyMuPDF"""
+    try:
+        text = ""
+        # Open the PDF file
+        pdf_document = fitz.open(file_path)
+        # Iterate through each page and extract text
+        for page_num in range(len(pdf_document)):
+            page = pdf_document[page_num]
+            text += page.get_text()
+        pdf_document.close()
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {e}")
+        raise
+
+# Helper function to extract text from DOCX files
+def extract_text_from_docx(file_path):
+    """Extract text from DOCX file using python-docx"""
+    try:
+        text = ""
+        # Open the DOCX file
+        doc = docx.Document(file_path)
+        # Iterate through each paragraph and extract text
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting text from DOCX: {e}")
+        raise
 
 # Define routes
 @app.route("/")
@@ -70,22 +105,56 @@ def upload_file():
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             
-            # Get file details for the success page
+            # Get file details
             file_size = os.path.getsize(file_path)
             readable_size = f"{file_size / 1024:.1f} KB" if file_size < 1024 * 1024 else f"{file_size / (1024 * 1024):.1f} MB"
-            file_type = filename.rsplit('.', 1)[1].upper()
+            file_type = filename.rsplit('.', 1)[1].lower()
             upload_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             logger.info(f"File uploaded successfully: {filename}")
             
-            return render_template(
-                "upload_success.html",
-                title="Upload Successful",
-                filename=filename,
-                filetype=file_type,
-                filesize=readable_size,
-                upload_time=upload_time
-            )
+            # Extract text based on file type
+            try:
+                extracted_text = ""
+                if file_type == 'pdf':
+                    extracted_text = extract_text_from_pdf(file_path)
+                elif file_type == 'docx':
+                    extracted_text = extract_text_from_docx(file_path)
+                else:
+                    logger.error(f"Unsupported file type for text extraction: {file_type}")
+                    return render_template(
+                        "upload.html",
+                        title="File Upload",
+                        error=f"Cannot extract text from {file_type.upper()} files"
+                    )
+                
+                # Get the total length of extracted text
+                total_length = len(extracted_text)
+                
+                # Check if we need to truncate the text for the preview
+                truncated = False
+                if total_length > app.config['PREVIEW_TEXT_MAX_LENGTH']:
+                    extracted_text = extracted_text[:app.config['PREVIEW_TEXT_MAX_LENGTH']] + "..."
+                    truncated = True
+                
+                # Render the preview template with the extracted text
+                return render_template(
+                    "preview.html",
+                    title="Text Preview",
+                    filename=filename,
+                    filetype=file_type.upper(),
+                    extracted_text=extracted_text,
+                    total_length=total_length,
+                    truncated=truncated
+                )
+                
+            except Exception as e:
+                logger.error(f"Error processing file {filename}: {str(e)}")
+                return render_template(
+                    "upload.html",
+                    title="File Upload",
+                    error=f"Error extracting text: {str(e)}"
+                )
         else:
             logger.error("Invalid file type")
             return render_template(
