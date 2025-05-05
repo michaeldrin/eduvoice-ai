@@ -1,0 +1,42 @@
+<!-- Floating Action Button (FAB) -->
+<div class="floating-action-btn" id="fab-button">
+    <i class="bi bi-plus-lg"></i>
+</div>
+
+<!-- Floating Action Button Menu -->
+<div class="fab-menu" id="fab-menu">
+    <!-- Upload Document Button -->
+    <div class="fab-item">
+        <span class="btn-label">Upload Document</span>
+        <a href="{{ url_for('upload_file') }}" class="btn btn-success">
+            <i class="bi bi-upload"></i>
+        </a>
+    </div>
+    
+    <!-- Dashboard Button -->
+    <div class="fab-item">
+        <span class="btn-label">Dashboard</span>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-info">
+            <i class="bi bi-table"></i>
+        </a>
+    </div>
+
+    <!-- Settings Button -->
+    <div class="fab-item">
+        <span class="btn-label">Settings</span>
+        <a href="{{ url_for('settings') }}" class="btn btn-secondary">
+            <i class="bi bi-gear"></i>
+        </a>
+    </div>
+    
+    <!-- Home Button -->
+    <div class="fab-item">
+        <span class="btn-label">Home</span>
+        <a href="{{ url_for('home_page') }}" class="btn btn-primary">
+            <i class="bi bi-house"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Include the FAB JavaScript at the end of the body -->
+<script src="{{ url_for('static', filename='js/floating-action-button.js') }}"></script>

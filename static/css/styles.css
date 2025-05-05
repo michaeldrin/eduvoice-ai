@@ -3,6 +3,7 @@ body {
     min-height: 100vh;
     display: flex;
     align-items: center;
+    position: relative;
 }
 
 .card {
@@ -17,4 +18,81 @@ body {
 /* Ensure proper contrast in the dark theme */
 .text-muted {
     color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Floating Action Button */
+.floating-action-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--bs-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 999;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.floating-action-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.floating-action-btn i {
+    font-size: 24px;
+}
+
+/* Floating Action Button Menu */
+.fab-menu {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    z-index: 998;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.fab-menu.show {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.fab-item {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.fab-item .btn {
+    border-radius: 30px;
+    padding: 8px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+.fab-item .btn-label {
+    margin-right: 10px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    background-color: var(--bs-dark);
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.fab-menu.show .fab-item .btn-label {
+    opacity: 1;
+    transform: translateX(0);
 }
