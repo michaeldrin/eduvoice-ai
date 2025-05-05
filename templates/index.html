@@ -182,11 +182,23 @@
                             <i class="bi bi-rocket-takeoff-fill me-2"></i>Get Started
                         </a>
                         {% else %}
-                        <a href="/login" class="btn btn-primary btn-lg get-started-btn">
+                        <a href="/login" class="btn btn-primary btn-lg get-started-btn" style="background-color: var(--bs-indigo); border-color: var(--bs-indigo); box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.3s ease;">
                             <i class="bi bi-google me-2"></i>Login with Google
+                        </a>
+                        <a href="/guest" class="btn btn-lg get-started-btn" style="background-color: var(--bs-indigo); border-color: var(--bs-indigo); color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.15); transition: all 0.3s ease;">
+                            <i class="bi bi-person-fill me-2"></i>Continue as Guest
                         </a>
                         {% endif %}
                     </div>
+                    
+                    <style>
+                        .get-started-btn:hover {
+                            transform: translateY(-2px);
+                            box-shadow: 0 6px 12px rgba(0,0,0,0.2) !important;
+                            background-color: var(--bs-indigo);
+                            filter: brightness(110%);
+                        }
+                    </style>
                 </div>
             </div>
         </section>

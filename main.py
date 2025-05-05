@@ -1139,6 +1139,34 @@ def unhandled_exception(e):
         show_details=False
     )
 
+# Guest access route
+@app.route('/guest')
+def guest_access():
+    """
+    Allow limited access to the application as a guest user
+    """
+    logger.debug("Guest access requested")
+    
+    # Create a guest session with limited access
+    session['user'] = {
+        'id': f"guest_{uuid.uuid4().hex[:8]}",
+        'name': 'Guest User',
+        'email': 'guest@example.com',
+        'picture': None,
+        'logged_in_at': datetime.datetime.now().isoformat(),
+        'auth_provider': 'guest',
+        'is_guest': True
+    }
+    
+    # Get or create guest user settings
+    user_settings = get_user_settings()
+    
+    # Flash a message about guest limitations
+    flash('You are using EduVoice as a guest. Some features may be limited. Log in with Google for full access.', 'info')
+    
+    # Redirect to dashboard with limited functionality
+    return redirect(url_for('dashboard', message="Welcome, Guest User!"))
+
 # Run the application
 if __name__ == "__main__":
     # Run Flask app
