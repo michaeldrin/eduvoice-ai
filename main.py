@@ -680,6 +680,73 @@ def generate_interaction_tips(document_summary, filetype):
         logger.exception(f"Error generating interaction tips: {e}")
         return None, f"Error generating tips: {str(e)}"
 
+def generate_learning_suggestions(document_summary):
+    """
+    Generate next learning suggestions based on the document content
+    
+    Args:
+        document_summary: The summary of the document
+        
+    Returns:
+        List of learning suggestions as a JSON string, or None and error message if generation fails
+    """
+    try:
+        # Get OpenAI API key from environment variables
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+        
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+        
+        # Create prompt for generating learning suggestions
+        prompt = f"""Based on this document summary, suggest 3 to 4 related educational topics the user should study next.
+        Return them as a JSON array of objects with 'title' and 'description' properties.
+        
+        Make sure the suggestions are specific and related to the document content, not generic learning topics.
+        Each suggestion should include a concise title (3-5 words) and a brief description (15-25 words).
+        
+        Document Summary:
+        {document_summary[:2000]}  # Limiting to first 2000 chars
+        
+        Example format:
+        [
+            {{
+                "title": "Advanced Machine Learning",
+                "description": "Explore mathematical foundations and implementations of neural networks, decision trees, and support vector machines."
+            }},
+            {{
+                "title": "Data Visualization Techniques",
+                "description": "Learn effective methods for representing complex datasets through charts, graphs, and interactive visualizations."
+            }}
+        ]
+        
+        Response:"""
+        
+        # Generate suggestions
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=600,
+            temperature=0.7,
+            response_format={"type": "json_object"}
+        )
+        
+        suggestions_json = response.choices[0].message.content.strip()
+        # Parse to validate JSON and then return the string for storage
+        json.loads(suggestions_json)  # Validate JSON
+        return suggestions_json, None
+        
+    except json.JSONDecodeError as e:
+        logger.exception(f"Invalid JSON in learning suggestions: {e}")
+        return None, f"Failed to generate valid learning suggestions format: {str(e)}"
+    except Exception as e:
+        logger.exception(f"Error generating learning suggestions: {e}")
+        return None, f"Failed to generate learning suggestions: {str(e)}"
+
 # Simple text similarity search function
 
 def simple_text_search(query, document_text, chunk_size=1000, overlap=200, top_k=3):
