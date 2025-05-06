@@ -46,10 +46,16 @@ class Document(db.Model):
     filetype = db.Column(db.String(50), nullable=False)
     summary = db.Column(db.Text, nullable=True)
     text_content = db.Column(db.Text, nullable=True)  # Store the extracted text content
+    text_filename = db.Column(db.String(255), nullable=True)  # Stored filename of extracted text
+    audio_filename = db.Column(db.String(255), nullable=True)  # Stored filename of audio summary
+    auto_processed = db.Column(db.Boolean, default=False)  # Flag if document was auto-processed
+    language = db.Column(db.String(10), nullable=True)  # Original document language
     interaction_tips = db.Column(db.Text, nullable=True)  # Store personalized interaction tips
     learning_suggestions = db.Column(db.Text, nullable=True)  # Store next learning suggestions as JSON
     has_translation = db.Column(db.Boolean, default=False)  # Flag if document has been translated
     translated_text = db.Column(db.Text, nullable=True)  # Translated text content
+    translated_summary = db.Column(db.Text, nullable=True)  # Translated summary
+    translated_content = db.Column(db.Text, nullable=True)  # Translated content
     translation_language = db.Column(db.String(10), nullable=True)  # Language code of translation
     language_guide = db.Column(db.Text, nullable=True)  # Language character guide
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
@@ -73,5 +79,11 @@ class Document(db.Model):
             'has_suggestions': self.learning_suggestions is not None,
             'has_translation': self.has_translation,
             'translation_language': self.translation_language,
+            'language': self.language,
+            'text_filename': self.text_filename,
+            'audio_filename': self.audio_filename,
+            'auto_processed': self.auto_processed,
+            'has_translated_summary': self.translated_summary is not None,
+            'has_translated_content': self.translated_content is not None,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S')
         }
