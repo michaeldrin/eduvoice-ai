@@ -834,43 +834,74 @@ def upload_file():
         return redirect(url_for('index'))
 
 @app.route('/document/<int:document_id>')
+@db_retry(max_retries=3)
 def view_document(document_id):
     """View uploaded document with summary and chat"""
-    # Retrieve document
-    document = Document.query.get_or_404(document_id)
-    
-    # Check if user owns this document (session-based)
-    if document.session_id != session.get('session_id'):
-        flash("You don't have permission to view this document")
-        return redirect(url_for('index'))
-    
-    # Retrieve chat history from database
-    chat_messages = ChatMessage.query.filter_by(
-        document_id=document_id,
-        session_id=session['session_id']
-    ).order_by(ChatMessage.created_at).all()
-    
-    # Initialize chat history in session if not exists
-    if 'chat_history' not in session:
-        session['chat_history'] = {}
-    
-    # If we don't have chat history for this document in session, initialize it
-    doc_id_str = str(document_id)
-    if doc_id_str not in session['chat_history']:
-        session['chat_history'][doc_id_str] = []
-        session.modified = True
-    
-    # Convert database messages to dict format for template rendering
-    db_messages = [msg.to_dict() for msg in chat_messages]
-    
-    return render_template(
-        'document.html',
-        document=document,
-        chat_messages=db_messages,
-        session_chat_history=session['chat_history'].get(doc_id_str, [])
-    )
+    try:
+        # Retrieve document with error handling
+        document = Document.query.get_or_404(document_id)
+            
+        # Check if user owns this document (session-based)
+        if document.session_id != session.get('session_id'):
+            flash("You don't have permission to view this document")
+            return redirect(url_for('index'))
+        
+        # Retrieve chat history from database with error handling
+        chat_messages = []
+        try:
+            chat_messages = ChatMessage.query.filter_by(
+                document_id=document_id,
+                session_id=session['session_id']
+            ).order_by(ChatMessage.created_at).all()
+            logger.info(f"Retrieved {len(chat_messages)} chat messages for document {document_id}")
+        except Exception as chat_error:
+            logger.error(f"Error retrieving chat messages: {chat_error}")
+            db.session.rollback()
+            flash("Unable to retrieve chat history. Using cached data if available.", "warning")
+        
+        # Initialize chat history in session if not exists
+        if 'chat_history' not in session:
+            session['chat_history'] = {}
+        
+        # If we don't have chat history for this document in session, initialize it
+        doc_id_str = str(document_id)
+        if doc_id_str not in session['chat_history']:
+            session['chat_history'][doc_id_str] = []
+            session.modified = True
+        
+        # Convert database messages to dict format for template rendering
+        db_messages = []
+        try:
+            db_messages = [msg.to_dict() for msg in chat_messages]
+        except Exception as convert_error:
+            logger.error(f"Error converting chat messages: {convert_error}")
+        
+        # Check if there are flashcards for this document
+        has_flashcards = False
+        if 'flashcards' in session and doc_id_str in session['flashcards']:
+            has_flashcards = True
+        
+        return render_template(
+            'document.html',
+            document=document,
+            chat_messages=db_messages,
+            session_chat_history=session['chat_history'].get(doc_id_str, []),
+            has_flashcards=has_flashcards
+        )
+        
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error viewing document {document_id}: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Show error message and redirect to dashboard
+        flash(f"An error occurred while viewing the document: {str(e)}", "error")
+        return redirect(url_for('dashboard'))
 
 @app.route('/api/chat/<int:document_id>', methods=['POST'])
+@db_retry(max_retries=3)
 def chat_with_document(document_id):
     """API endpoint for chat functionality"""
     try:
@@ -1076,33 +1107,48 @@ def chat_with_document(document_id):
         }), 500
 
 @app.route('/download/summary/<int:document_id>')
+@db_retry(max_retries=3)
 def download_summary(document_id):
     """Download document summary as text file"""
-    # Retrieve document
-    document = Document.query.get_or_404(document_id)
-    
-    # Check if user owns this document
-    if document.session_id != session.get('session_id'):
-        flash("You don't have permission to download this summary")
-        return redirect(url_for('index'))
-    
-    # Create summary file
-    summary_filename = f"summary_{document_id}.txt"
-    summary_path = os.path.join('static/summaries', summary_filename)
-    
-    # Write summary to file
-    with open(summary_path, 'w', encoding='utf-8') as f:
-        f.write(f"Summary of: {document.filename}\n")
-        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        f.write(document.summary)
-    
-    # Send file to user
-    return send_from_directory(
-        'static/summaries',
-        summary_filename,
-        as_attachment=True,
-        download_name=f"Summary-{document.filename}.txt"
-    )
+    try:
+        # Retrieve document
+        document = Document.query.get_or_404(document_id)
+        
+        # Check if user owns this document
+        if document.session_id != session.get('session_id'):
+            flash("You don't have permission to download this summary")
+            return redirect(url_for('index'))
+        
+        # Create summary directory if it doesn't exist
+        os.makedirs('static/summaries', exist_ok=True)
+        
+        # Create summary file
+        summary_filename = f"summary_{document_id}.txt"
+        summary_path = os.path.join('static/summaries', summary_filename)
+        
+        # Write summary to file
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            f.write(f"Summary of: {document.filename}\n")
+            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(document.summary or "No summary available.")
+        
+        # Send file to user
+        return send_from_directory(
+            'static/summaries',
+            summary_filename,
+            as_attachment=True,
+            download_name=f"Summary-{document.filename}.txt"
+        )
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error downloading summary: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Show error message
+        flash(f"An error occurred while downloading the summary: {str(e)}")
+        return redirect(url_for('document', document_id=document_id))
 
 @app.route('/dashboard')
 @db_retry(max_retries=3)
