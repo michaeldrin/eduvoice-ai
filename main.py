@@ -1105,6 +1105,7 @@ def download_summary(document_id):
     )
 
 @app.route('/dashboard')
+@db_retry(max_retries=3)
 def dashboard():
     """User dashboard showing uploaded documents"""
     # Check if user is in session
@@ -1117,16 +1118,31 @@ def dashboard():
         
     if 'chat_history' not in session:
         session['chat_history'] = {}
+        
+    if 'flashcards' not in session:
+        session['flashcards'] = {}
     
-    # Retrieve user's documents from database
-    db_documents = Document.query.filter_by(session_id=session['session_id']).order_by(Document.upload_time.desc()).all()
+    # Retrieve user's documents from database with error handling
+    db_documents = []
+    try:
+        db_documents = Document.query.filter_by(session_id=session['session_id']).order_by(Document.upload_time.desc()).all()
+        logger.info(f"Retrieved {len(db_documents)} documents from database")
+    except Exception as db_error:
+        logger.error(f"Error retrieving documents from database: {db_error}")
+        db.session.rollback()
+        # Fall back to session documents
+        if 'uploads' in session and session['uploads']:
+            logger.info("Using session document data as fallback")
+            flash("Using cached document data due to database connection issues.", "warning")
+            return render_template('dashboard.html', documents=session['uploads'])
+        else:
+            flash("Unable to retrieve your documents. Please try again later.", "error")
     
     # Combine database documents with session documents
     # Session documents have priority to show the most up-to-date information
     session_doc_ids = [doc['id'] for doc in session['uploads']]
     
     # Filter out documents that are already in session
-    additional_docs = []
     for doc in db_documents:
         if doc.id not in session_doc_ids:
             # Add to session for future reference
@@ -1139,33 +1155,43 @@ def dashboard():
             }
             session['uploads'].append(session_document)
             session.modified = True
-    
-    # Pass the session documents to the template
-    return render_template('dashboard.html', 
-                          session_documents=session['uploads'],
-                          show_history_controls=True)
+            
+    # Return the template with documents
+    return render_template('dashboard.html', documents=db_documents)
 
 # Route to serve chat attachment files
 @app.route('/attachments/<path:filename>')
+@db_retry(max_retries=3)
 def serve_attachment(filename):
     """Serve attachment files"""
-    # Check if user is in session
-    if 'session_id' not in session:
-        flash("Please login to access attachments")
-        return redirect(url_for('index'))
-    
-    # Check if the attachment exists in database and belongs to current session
-    chat_message = ChatMessage.query.filter_by(
-        attachment_filename=filename,
-        session_id=session['session_id']
-    ).first()
-    
-    if not chat_message:
-        flash("Attachment not found or you don't have permission to access it")
-        return redirect(url_for('index'))
-    
-    # Serve the file
-    return send_from_directory(app.config['ATTACHMENT_FOLDER'], filename)
+    try:
+        # Check if user is in session
+        if 'session_id' not in session:
+            flash("Please login to access attachments")
+            return redirect(url_for('index'))
+        
+        # Check if the attachment exists in database and belongs to current session
+        chat_message = ChatMessage.query.filter_by(
+            attachment_filename=filename,
+            session_id=session['session_id']
+        ).first()
+        
+        if not chat_message:
+            flash("Attachment not found or you don't have permission to access it")
+            return redirect(url_for('index'))
+        
+        # Serve the file
+        return send_from_directory(app.config['ATTACHMENT_FOLDER'], filename)
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error serving attachment {filename}: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Return error message
+        flash("An error occurred accessing this attachment. Please try again later.", "error")
+        return redirect(url_for('dashboard'))
 
 # API endpoint to generate flashcards
 @app.route('/api/generate-flashcards/<int:document_id>', methods=['POST'])
