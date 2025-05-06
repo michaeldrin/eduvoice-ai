@@ -13,6 +13,14 @@ class DocxPlaceholder:
     def Document(self, *args, **kwargs):
         raise ImportError("python-docx module is not installed")
 
+class PILPlaceholder:
+    def open(self, *args, **kwargs):
+        raise ImportError("PIL/Pillow module is not installed")
+
+class PytesseractPlaceholder:
+    def image_to_string(self, *args, **kwargs):
+        raise ImportError("pytesseract module is not installed")
+
 # Import required libraries with fallbacks
 try:
     import fitz  # PyMuPDF
@@ -23,6 +31,16 @@ try:
     import docx
 except ImportError:
     docx = DocxPlaceholder()
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = PILPlaceholder()
+
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = PytesseractPlaceholder()
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from flask import send_from_directory, flash
@@ -487,6 +505,14 @@ def upload_file():
             extracted_text, error = extract_text_from_pdf(file_path)
         elif filetype == 'docx':
             extracted_text, error = extract_text_from_docx(file_path)
+        elif filetype == 'txt':
+            extracted_text, error = extract_text_from_txt(file_path)
+        elif filetype in ['jpg', 'jpeg', 'png']:
+            extracted_text, error = extract_text_from_image(file_path)
+            # Add OCR indicator to inform the user
+            if extracted_text and not error:
+                extracted_text = f"[OCR EXTRACTED TEXT FROM IMAGE]\n\n{extracted_text}"
+                logger.info(f"Successfully extracted text from image: {filename}")
         else:
             # This shouldn't happen due to allowed_file check, but just in case
             extracted_text, error = None, "Unsupported file type"
