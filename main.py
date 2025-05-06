@@ -142,21 +142,43 @@ def oauth_callback():
 # This function has been moved to combine with the existing inject_global_variables
 
 # Create all database tables
-with app.app_context():
-    # Make sure to check if tables need to be updated
-    try:
-        logger.info("Initializing database tables...")
-        db.create_all()
-        logger.info("Database tables created successfully")
-    except Exception as db_error:
-        logger.error(f"Error initializing database tables: {db_error}")
-        # Try to recover gracefully
+# Define function to recreate database schema if needed
+def init_database():
+    """Initialize database schema and handle outdated schema issues"""
+    with app.app_context():
+        # Check if we need to recreate tables due to schema changes
         try:
-            db.session.rollback()
-            logger.info("Session rolled back successfully")
-        except Exception as rollback_error:
-            logger.error(f"Error rolling back session: {rollback_error}")
-            pass
+            # First, check if we can access the document table
+            try:
+                logger.info("Checking if database tables need to be recreated...")
+                # Try to query one document to check if all columns exist
+                Document.query.first()
+                logger.info("Database tables verification successful")
+            except Exception as check_error:
+                # If there's a column error, we need to drop and recreate tables
+                logger.warning(f"Database schema may be outdated: {check_error}")
+                logger.info("Dropping all tables and recreating...")
+                db.drop_all()
+                db.create_all()
+                logger.info("Database tables dropped and recreated successfully")
+                return
+                
+            # Normal initialization if no errors
+            logger.info("Initializing database tables...")
+            db.create_all()
+            logger.info("Database tables created successfully")
+        except Exception as db_error:
+            logger.error(f"Error initializing database tables: {db_error}")
+            # Try to recover gracefully
+            try:
+                db.session.rollback()
+                logger.info("Session rolled back successfully")
+            except Exception as rollback_error:
+                logger.error(f"Error rolling back session: {rollback_error}")
+                pass
+
+# Initialize the database
+init_database()
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -2179,34 +2201,47 @@ def summarize_text():
             user_id = session.get('session_id', uuid.uuid4().hex)
             logger.info(f"Associating document with guest session: {user_id}")
             
-        document = Document(
-            user_id=user_id,  # Associate document with user
-            filename=filename,
-            filetype=filetype,
-            summary=summary,
-            text_content=extracted_text,  # Store the full text content for chat
-            text_filename=text_filename,
-            audio_filename=audio_file,
-            upload_time=datetime.now(),
-            language=summary_language,  # Use the selected summary language
-            auto_processed=True  # Mark as processed since we're doing it here
-        )
-        db.session.add(document)
-        db.session.commit()
-        logger.info(f"Document record saved to database: {filename}")
-        
-        # Store document ID in session for the chat feature in summary page
-        session['last_document_id'] = document.id
-        
-        # Generate initial chat message for document chat
+        # Initialize document variable to None so we can check it later even if creation fails
+        document = None
         try:
-            welcome_message = generate_initial_chat_message(document)
-            if welcome_message:
-                logger.info(f"Generated initial chat message for document {document.id}")
-            else:
-                logger.warning(f"Failed to generate initial chat message for document {document.id}")
-        except Exception as chat_error:
-            logger.error(f"Error generating initial chat message: {chat_error}")
+            document = Document(
+                user_id=user_id,  # Associate document with user
+                filename=filename,
+                filetype=filetype,
+                summary=summary,
+                text_content=extracted_text,  # Store the full text content for chat
+                text_filename=text_filename,
+                audio_filename=audio_file,
+                upload_time=datetime.now(),
+                language=summary_language,  # Use the selected summary language
+                auto_processed=True  # Mark as processed since we're doing it here
+            )
+            db.session.add(document)
+            db.session.commit()
+            logger.info(f"Document record saved to database: {filename}")
+        except Exception as db_save_error:
+            # Explicitly handle database errors during document creation
+            logger.error(f"Database error while saving document: {db_save_error}")
+            db.session.rollback()
+            # We'll continue even with this error so the user at least sees their document
+            # But we won't have document.id, so can't store it in session
+        
+        # Only try to store document ID and generate welcome message if document was saved successfully
+        if document and hasattr(document, 'id'):
+            # Store document ID in session for the chat feature in summary page
+            session['last_document_id'] = document.id
+            
+            # Generate initial chat message for document chat
+            try:
+                welcome_message = generate_initial_chat_message(document)
+                if welcome_message:
+                    logger.info(f"Generated initial chat message for document {document.id}")
+                else:
+                    logger.warning(f"Failed to generate initial chat message for document {document.id}")
+            except Exception as chat_error:
+                logger.error(f"Error generating initial chat message: {chat_error}")
+        else:
+            logger.warning("Document was not saved to database, skipping chat message generation")
     except Exception as e:
         logger.error(f"Error saving document to database: {e}")
         # Continue anyway - don't let database issues prevent summary display
