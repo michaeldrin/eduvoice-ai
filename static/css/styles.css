@@ -175,3 +175,39 @@ body {
     opacity: 1;
     transform: translateX(0);
 }
+
+/* Interaction Tips Styles */
+.interaction-tips-card {
+    border-left: 4px solid var(--bs-info);
+}
+
+.tips-container {
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.tips-container ol, 
+.tips-container ul {
+    padding-left: 1.2rem;
+}
+
+.tips-container li {
+    margin-bottom: 0.75rem;
+}
+
+.tips-container strong {
+    color: var(--bs-info);
+}
+
+/* Animation for tips collapse */
+#interactionTipsContent.collapsing {
+    transition: height 0.35s ease;
+}
+
+#tipsCollapseIcon {
+    transition: transform 0.35s ease;
+}
+
+.btn-info {
+    color: #fff;
+}
