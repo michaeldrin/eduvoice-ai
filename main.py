@@ -4,24 +4,25 @@ from datetime import datetime, timedelta
 import uuid
 import traceback  # For enhanced error reporting
 import requests  # For API calls and error handling
+# Define placeholder classes at module level for visibility throughout the code
+class FitzPlaceholder:
+    def open(self, *args, **kwargs):
+        raise ImportError("PyMuPDF (fitz) module is not installed")
+
+class DocxPlaceholder:
+    def Document(self, *args, **kwargs):
+        raise ImportError("python-docx module is not installed")
+
 try:
     import fitz  # PyMuPDF
 except ImportError:
     # Create a placeholder fitz module with minimal functionalities for error handling
-    class FitzPlaceholder:
-        def open(self, *args, **kwargs):
-            raise ImportError("PyMuPDF (fitz) module is not installed")
-    
     fitz = FitzPlaceholder()
 
 try:
     import docx
 except ImportError:
     # Create a placeholder docx module with minimal functionalities for error handling
-    class DocxPlaceholder:
-        def Document(self, *args, **kwargs):
-            raise ImportError("python-docx module is not installed")
-    
     docx = DocxPlaceholder()
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
@@ -142,7 +143,20 @@ def oauth_callback():
 
 # Create all database tables
 with app.app_context():
-    db.create_all()
+    # Make sure to check if tables need to be updated
+    try:
+        logger.info("Initializing database tables...")
+        db.create_all()
+        logger.info("Database tables created successfully")
+    except Exception as db_error:
+        logger.error(f"Error initializing database tables: {db_error}")
+        # Try to recover gracefully
+        try:
+            db.session.rollback()
+            logger.info("Session rolled back successfully")
+        except Exception as rollback_error:
+            logger.error(f"Error rolling back session: {rollback_error}")
+            pass
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
