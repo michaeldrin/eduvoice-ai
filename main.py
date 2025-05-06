@@ -62,8 +62,11 @@ def inject_global_variables():
 
 # Configure upload folder and allowed extensions
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+ATTACHMENT_FOLDER = os.path.join(UPLOAD_FOLDER, 'attachments')
+ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt', 'jpg', 'jpeg', 'png'}
+IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['ATTACHMENT_FOLDER'] = ATTACHMENT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
 # Configure database
@@ -73,6 +76,7 @@ db.init_app(app)
 
 # Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(ATTACHMENT_FOLDER, exist_ok=True)
 os.makedirs('static/summaries', exist_ok=True)
 
 # Initialize database
@@ -84,6 +88,60 @@ with app.app_context():
 # Helper function to check allowed file extensions
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Helper function to check if a file is an image
+def is_image_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in IMAGE_EXTENSIONS
+
+# Helper function to extract text from image files using OCR
+def extract_text_from_image(file_path):
+    """Extract text from image file using pytesseract OCR"""
+    try:
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.error(f"Image file not found: {file_path}")
+            return None, "Image file not found. Please upload the file again."
+        
+        # Open the image with PIL
+        image = Image.open(file_path)
+        
+        # Run OCR on the image
+        text = pytesseract.image_to_string(image)
+        
+        # Check if we got any text
+        if not text or len(text.strip()) == 0:
+            logger.warning(f"No text extracted from image: {file_path}")
+            return None, "No readable text found in the image file. The image may not contain clear text."
+            
+        return text, None
+        
+    except Exception as e:
+        logger.exception(f"Error extracting text from image: {e}")
+        return None, f"Error processing image file: {str(e)}"
+
+# Helper function to extract text from plain text files
+def extract_text_from_txt(file_path):
+    """Extract text from TXT file"""
+    try:
+        # Check if file exists
+        if not os.path.exists(file_path):
+            logger.error(f"Text file not found: {file_path}")
+            return None, "Text file not found. Please upload the file again."
+        
+        # Open and read the text file
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            text = f.read()
+        
+        # Check if we got any text
+        if not text or len(text.strip()) == 0:
+            logger.warning(f"No text extracted from text file: {file_path}")
+            return None, "The text file appears to be empty."
+            
+        return text, None
+        
+    except Exception as e:
+        logger.exception(f"Error extracting text from text file: {e}")
+        return None, f"Error processing text file: {str(e)}"
 
 # Helper function to extract text from PDF files
 def extract_text_from_pdf(file_path):
