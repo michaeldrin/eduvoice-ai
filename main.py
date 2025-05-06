@@ -1,8 +1,13 @@
 import os
 import logging
 import uuid
+import re
+import random
 from datetime import datetime
 import json
+from functools import wraps
+from io import BytesIO
+from traceback import format_exc
 
 # Define placeholder classes for libraries that might not be installed
 class FitzPlaceholder:
@@ -118,11 +123,51 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(ATTACHMENT_FOLDER, exist_ok=True)
 os.makedirs('static/summaries', exist_ok=True)
 
+# Database retry decorator
+def db_retry(max_retries=3):
+    """Decorator to retry database operations on connection errors"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    logger.warning(f"Database operation failed (attempt {retries}/{max_retries}): {str(e)}")
+                    
+                    # Check if it's a connection error we can retry
+                    error_str = str(e).lower()
+                    if "operational error" in error_str or "connection" in error_str:
+                        # Do a rollback to reset the session state
+                        try:
+                            db.session.rollback()
+                            logger.info("Session rolled back successfully")
+                        except Exception as rollback_error:
+                            logger.error(f"Failed to rollback session: {rollback_error}")
+                            
+                        # Last attempt, let it fail normally
+                        if retries >= max_retries:
+                            logger.error(f"Maximum retries reached ({max_retries}), operation failed")
+                            raise
+                    else:
+                        # Not a connection error we can retry, re-raise immediately
+                        raise
+            # This should not be reached normally, but just in case
+            raise Exception(f"Database operation failed after {max_retries} retries")
+        return wrapper
+    return decorator
+
 # Initialize database
 with app.app_context():
-    # Create tables (they should already exist from SQL initialization)
-    db.create_all()
-    logger.info("Database tables initialized successfully")
+    try:
+        # Create tables (they should already exist from SQL initialization)
+        db.create_all()
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        # We'll continue and let individual requests handle specific errors
 
 # Helper function to check allowed file extensions
 def allowed_file(filename):
