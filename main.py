@@ -299,9 +299,16 @@ def extract_text_from_txt(file_path):
 
 # Helper function to extract text from PDF files
 def extract_text_from_pdf(file_path):
-    """Extract text from PDF file using PyMuPDF"""
+    """
+    Extract text, images, and tables from PDF file
+    
+    Uses PyMuPDF for basic text and image extraction,
+    pdfplumber for table extraction, and pytesseract for OCR on images
+    """
     try:
         text = ""
+        image_texts = []
+        table_texts = []
         
         # Check if file exists
         if not os.path.exists(file_path):
@@ -313,7 +320,7 @@ def extract_text_from_pdf(file_path):
             logger.error("PyMuPDF (fitz) module is not installed")
             return None, "PDF processing is currently unavailable. The server is missing required libraries."
          
-        # Open and extract text from the PDF
+        # 1. Extract text and images using PyMuPDF
         with fitz.open(file_path) as pdf_document:
             if len(pdf_document) == 0:
                 logger.warning(f"PDF has no pages: {file_path}")
@@ -324,13 +331,215 @@ def extract_text_from_pdf(file_path):
                 page = pdf_document[page_num]
                 page_text = page.get_text()
                 text += page_text
+                
+                # Extract images from this page
+                image_list = page.get_images(full=True)
+                
+                # Process each image on the page
+                for img_index, img_info in enumerate(image_list):
+                    try:
+                        xref = img_info[0]  # Get reference number for the image
+                        base_image = pdf_document.extract_image(xref)
+                        image_bytes = base_image["image"]
+                        
+                        # Need to save the image temporarily for OCR
+                        temp_img_path = os.path.join(
+                            os.path.dirname(file_path),
+                            f"temp_img_p{page_num+1}_{img_index}.jpg"
+                        )
+                        
+                        with open(temp_img_path, "wb") as temp_file:
+                            temp_file.write(image_bytes)
+                        
+                        # Check image size - skip tiny images (likely icons)
+                        img = Image.open(temp_img_path)
+                        width, height = img.size
+                        
+                        # Skip small images (likely icons or decorative elements)
+                        if width < 100 or height < 100:
+                            os.remove(temp_img_path)
+                            continue
+                        
+                        # Process with OCR if pytesseract is available
+                        if not isinstance(pytesseract, PytesseractPlaceholder):
+                            # Try OCR on the image
+                            ocr_text = pytesseract.image_to_string(img)
+                            
+                            # Only add if meaningful text was found (more than 10 chars)
+                            if ocr_text and len(ocr_text.strip()) > 10:
+                                image_texts.append({
+                                    'page': page_num + 1,
+                                    'text': ocr_text.strip()
+                                })
+                                logger.info(f"Extracted OCR text from image on page {page_num+1}")
+                        
+                        # Clean up the temporary file
+                        os.remove(temp_img_path)
+                        
+                    except Exception as img_err:
+                        logger.warning(f"Error processing image on page {page_num+1}: {str(img_err)}")
+                        # Continue with next image, don't stop the whole process
+        
+        # 2. Extract tables using pdfplumber and camelot
+        try:
+            # First try with pdfplumber which is easier to use but less powerful
+            import pdfplumber
             
+            with pdfplumber.open(file_path) as pdf:
+                for page_num, page in enumerate(pdf.pages):
+                    tables = page.extract_tables()
+                    
+                    if tables:
+                        for table_idx, table in enumerate(tables):
+                            # Convert table to text format
+                            if table and len(table) > 0:
+                                table_text = ""
+                                
+                                # Process each row
+                                for row in table:
+                                    # Filter None values and convert to strings
+                                    processed_row = [str(cell).strip() if cell is not None else "" for cell in row]
+                                    # Add row text
+                                    table_text += " | ".join(processed_row) + "\n"
+                                
+                                if table_text.strip():
+                                    table_texts.append({
+                                        'page': page_num + 1,
+                                        'text': table_text.strip()
+                                    })
+                                    logger.info(f"Extracted table {table_idx+1} from page {page_num+1} using pdfplumber")
+            
+            # Then try with camelot for more complex tables
+            try:
+                import camelot
+                
+                # Camelot requires "lattice" or "stream" mode
+                # "lattice" is for tables with visible borders
+                # "stream" is for tables without clear borders
+                camelot_tables = camelot.read_pdf(file_path, pages='all', flavor='lattice')
+                
+                # Check if any tables were found
+                if camelot_tables and len(camelot_tables) > 0:
+                    for i, table in enumerate(camelot_tables):
+                        # Get the table page number
+                        table_page = table.page
+                        
+                        # Convert to dataframe then to string
+                        df = table.df
+                        
+                        # Skip tables that are too small (likely false positives)
+                        if df.shape[0] <= 1 or df.shape[1] <= 1:
+                            continue
+                            
+                        # Format the table as text
+                        table_text = ""
+                        for _, row in df.iterrows():
+                            # Join cells with separator, skip empty cells
+                            row_text = " | ".join([str(cell).strip() for cell in row if str(cell).strip()])
+                            if row_text:
+                                table_text += row_text + "\n"
+                        
+                        # Check if this table provides new information
+                        # Only add if it has meaningful content
+                        if table_text.strip():
+                            # Check if this table is already extracted by pdfplumber
+                            is_duplicate = False
+                            for existing_table in table_texts:
+                                if existing_table['page'] == int(table_page):
+                                    # Simple check for similarity - if more than 70% of lines are identical
+                                    existing_lines = set(existing_table['text'].split('\n'))
+                                    new_lines = set(table_text.split('\n'))
+                                    common_lines = existing_lines.intersection(new_lines)
+                                    
+                                    if len(common_lines) / max(len(existing_lines), len(new_lines)) > 0.7:
+                                        is_duplicate = True
+                                        break
+                            
+                            if not is_duplicate:
+                                table_texts.append({
+                                    'page': int(table_page),
+                                    'text': table_text.strip()
+                                })
+                                logger.info(f"Extracted additional table from page {table_page} using camelot")
+                
+                # Try with stream mode for tables without borders
+                try:
+                    stream_tables = camelot.read_pdf(file_path, pages='all', flavor='stream')
+                    
+                    if stream_tables and len(stream_tables) > 0:
+                        for i, table in enumerate(stream_tables):
+                            # Get the table page number
+                            table_page = table.page
+                            
+                            # Convert to dataframe then to string
+                            df = table.df
+                            
+                            # Skip tables that are too small (likely false positives)
+                            if df.shape[0] <= 1 or df.shape[1] <= 1:
+                                continue
+                                
+                            # Format the table as text
+                            table_text = ""
+                            for _, row in df.iterrows():
+                                # Join cells with separator, skip empty cells
+                                row_text = " | ".join([str(cell).strip() for cell in row if str(cell).strip()])
+                                if row_text:
+                                    table_text += row_text + "\n"
+                            
+                            # Only add if it has meaningful content and is not a duplicate
+                            if table_text.strip():
+                                # Check for duplicates
+                                is_duplicate = False
+                                for existing_table in table_texts:
+                                    if existing_table['page'] == int(table_page):
+                                        existing_lines = set(existing_table['text'].split('\n'))
+                                        new_lines = set(table_text.split('\n'))
+                                        common_lines = existing_lines.intersection(new_lines)
+                                        
+                                        if len(common_lines) / max(len(existing_lines), len(new_lines)) > 0.7:
+                                            is_duplicate = True
+                                            break
+                                
+                                if not is_duplicate:
+                                    table_texts.append({
+                                        'page': int(table_page),
+                                        'text': table_text.strip()
+                                    })
+                                    logger.info(f"Extracted stream table from page {table_page} using camelot")
+                    
+                except Exception as stream_err:
+                    logger.warning(f"Error with camelot stream mode: {str(stream_err)}")
+                
+            except ImportError:
+                logger.warning("camelot-py not available for advanced table extraction")
+            except Exception as camelot_err:
+                logger.warning(f"Error using camelot for table extraction: {str(camelot_err)}")
+                
+        except ImportError:
+            logger.warning("pdfplumber not available for table extraction")
+        except Exception as table_err:
+            logger.warning(f"Error extracting tables: {str(table_err)}")
+        
+        # 3. Combine all extracted content
+        combined_text = text
+        
+        # Add image texts if any were found
+        for img_data in image_texts:
+            combined_text += f"\n\n[Extracted from image on page {img_data['page']}]\n{img_data['text']}"
+        
+        # Add table texts if any were found
+        for table_data in table_texts:
+            combined_text += f"\n\n[Extracted from table on page {table_data['page']}]\n{table_data['text']}"
+        
         # Check if we got any text
-        if not text or len(text.strip()) == 0:
+        if not combined_text or len(combined_text.strip()) == 0:
             logger.warning(f"No text extracted from PDF: {file_path}")
             return None, "No readable text found in the PDF file. It may contain only images or be password protected."
+        
+        # Log extraction stats
+        logger.info(f"PDF extraction complete: {len(image_texts)} images and {len(table_texts)} tables processed")
             
-        return text, None
+        return combined_text, None
         
     except Exception as e:
         logger.exception(f"Error extracting text from PDF: {e}")
@@ -338,9 +547,16 @@ def extract_text_from_pdf(file_path):
 
 # Helper function to extract text from DOCX files
 def extract_text_from_docx(file_path):
-    """Extract text from DOCX file using python-docx"""
+    """
+    Extract text from DOCX file including tables and images
+    
+    Uses python-docx for text and table extraction
+    Extracts embedded images and processes them with OCR if possible
+    """
     try:
         text = ""
+        table_texts = []
+        image_texts = []
         
         # Check if file exists
         if not os.path.exists(file_path):
@@ -358,19 +574,116 @@ def extract_text_from_docx(file_path):
         # Extract text from paragraphs
         for paragraph in doc.paragraphs:
             text += paragraph.text + "\n"
+        
+        # Extract and format tables
+        for table_idx, table in enumerate(doc.tables):
+            table_text = ""
             
-        # Extract text from tables
-        for table in doc.tables:
+            # Process each row in the table
             for row in table.rows:
+                row_texts = []
+                
+                # Process each cell in the row
                 for cell in row.cells:
-                    text += cell.text + "\n"
+                    # Get all text from the cell (including from any paragraphs within)
+                    cell_text = ""
+                    for paragraph in cell.paragraphs:
+                        cell_text += paragraph.text.strip() + " "
+                    
+                    row_texts.append(cell_text.strip())
+                
+                # Add formatted row to table text
+                if any(row_texts):  # Only add non-empty rows
+                    table_text += " | ".join(row_texts) + "\n"
+            
+            # Add table if it contains content
+            if table_text.strip():
+                table_texts.append({
+                    'index': table_idx + 1,
+                    'text': table_text.strip()
+                })
+                logger.info(f"Extracted table {table_idx+1} from DOCX")
+        
+        # Extract images from DOCX if possible
+        try:
+            import zipfile
+            from xml.dom.minidom import parseString
+            import os.path
+            
+            # DOCX files are ZIP archives
+            image_index = 0
+            with zipfile.ZipFile(file_path) as docx_zip:
+                # Get list of all files in the docx
+                file_list = docx_zip.namelist()
+                
+                # Find image files
+                image_files = [f for f in file_list if f.startswith('word/media/')]
+                
+                for img_file in image_files:
+                    try:
+                        # Extract image to temp file
+                        temp_img_path = os.path.join(
+                            os.path.dirname(file_path),
+                            f"temp_docx_img_{image_index}.jpg"
+                        )
+                        
+                        with open(temp_img_path, "wb") as temp_file:
+                            temp_file.write(docx_zip.read(img_file))
+                        
+                        # Check image size - skip tiny images (likely icons)
+                        img = Image.open(temp_img_path)
+                        width, height = img.size
+                        
+                        # Skip small images (likely icons or decorative elements)
+                        if width < 100 or height < 100:
+                            os.remove(temp_img_path)
+                            continue
+                        
+                        # Process with OCR if pytesseract is available
+                        if not isinstance(pytesseract, PytesseractPlaceholder):
+                            # Try OCR on the image
+                            ocr_text = pytesseract.image_to_string(img)
+                            
+                            # Only add if meaningful text was found (more than 10 chars)
+                            if ocr_text and len(ocr_text.strip()) > 10:
+                                image_texts.append({
+                                    'index': image_index + 1,
+                                    'text': ocr_text.strip()
+                                })
+                                logger.info(f"Extracted OCR text from image {image_index+1} in DOCX")
+                                image_index += 1
+                        
+                        # Clean up the temporary file
+                        os.remove(temp_img_path)
+                        
+                    except Exception as img_err:
+                        logger.warning(f"Error processing DOCX image {img_file}: {str(img_err)}")
+                        # Continue with next image
+            
+        except Exception as img_extract_err:
+            logger.warning(f"Error extracting images from DOCX: {str(img_extract_err)}")
+            # Continue with processing - image extraction is optional enhancement
+        
+        # Combine all extracted content
+        combined_text = text
+        
+        # Add table texts
+        for table_data in table_texts:
+            combined_text += f"\n\n[Extracted from table {table_data['index']}]\n{table_data['text']}"
+        
+        # Add image texts
+        for img_data in image_texts:
+            combined_text += f"\n\n[Extracted from image {img_data['index']}]\n{img_data['text']}"
         
         # Check if we got any text
-        if not text or len(text.strip()) == 0:
+        if not combined_text or len(combined_text.strip()) == 0:
             logger.warning(f"No text extracted from DOCX: {file_path}")
             return None, "No readable text found in the DOCX file."
+        
+        # Log extraction stats
+        logger.info(f"DOCX extraction complete: {len(image_texts)} images with text and {len(table_texts)} tables processed")
             
-        return text, None
+        return combined_text, None
         
     except Exception as e:
         logger.exception(f"Error extracting text from DOCX: {e}")
