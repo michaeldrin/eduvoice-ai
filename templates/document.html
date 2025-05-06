@@ -315,44 +315,51 @@
             </div>
             <div class="card-body">
                 <div class="row" id="learning-suggestions">
-                    <script>
-                        document.addEventListener('DOMContentLoaded', function() {
-                            try {
-                                const suggestions = JSON.parse('{{ document.learning_suggestions|safe }}');
-                                const container = document.getElementById('learning-suggestions');
-                                
-                                if (suggestions && Array.isArray(suggestions) && suggestions.length > 0) {
-                                    suggestions.forEach(suggestion => {
-                                        const card = document.createElement('div');
-                                        card.className = 'col-md-6 col-lg-3 mb-3';
-                                        card.innerHTML = `
-                                            <div class="card h-100 suggestion-card">
-                                                <div class="card-body">
-                                                    <h5 class="card-title">${suggestion.title}</h5>
-                                                    <p class="card-text">${suggestion.description}</p>
-                                                </div>
-                                                <div class="card-footer bg-transparent">
-                                                    <a href="https://www.google.com/search?q=${encodeURIComponent(suggestion.title)}" 
-                                                       class="btn btn-sm btn-outline-info w-100" 
-                                                       target="_blank">
-                                                        Learn More <i class="bi bi-box-arrow-up-right ms-1"></i>
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        `;
-                                        container.appendChild(card);
-                                    });
-                                } else {
-                                    container.innerHTML = '<div class="col-12"><div class="alert alert-info">No learning suggestions available for this document.</div></div>';
-                                }
-                            } catch (e) {
-                                console.error('Error parsing learning suggestions:', e);
-                                document.getElementById('learning-suggestions').innerHTML = 
-                                    '<div class="col-12"><div class="alert alert-danger">Error loading learning suggestions.</div></div>';
-                            }
-                        });
-                    </script>
+                    <!-- Placeholder for learning suggestions -->
                 </div>
+                
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        try {
+                            // Double encoding/decoding to properly handle special characters
+                            const suggestionsJson = JSON.stringify({{ document.learning_suggestions|tojson }});
+                            const suggestions = JSON.parse(JSON.parse(suggestionsJson));
+                            const container = document.getElementById('learning-suggestions');
+                            
+                            if (suggestions && Array.isArray(suggestions) && suggestions.length > 0) {
+                                // Clear existing content
+                                container.innerHTML = '';
+                                
+                                suggestions.forEach(suggestion => {
+                                    const card = document.createElement('div');
+                                    card.className = 'col-md-6 col-lg-3 mb-3';
+                                    card.innerHTML = `
+                                        <div class="card h-100 suggestion-card">
+                                            <div class="card-body">
+                                                <h5 class="card-title">${suggestion.title}</h5>
+                                                <p class="card-text">${suggestion.description}</p>
+                                            </div>
+                                            <div class="card-footer bg-transparent">
+                                                <a href="https://www.google.com/search?q=${encodeURIComponent(suggestion.title)}" 
+                                                   class="btn btn-sm btn-outline-info w-100" 
+                                                   target="_blank">
+                                                    Learn More <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    `;
+                                    container.appendChild(card);
+                                });
+                            } else {
+                                container.innerHTML = '<div class="col-12"><div class="alert alert-info">No learning suggestions available for this document.</div></div>';
+                            }
+                        } catch (e) {
+                            console.error('Error parsing learning suggestions:', e);
+                            document.getElementById('learning-suggestions').innerHTML = 
+                                '<div class="col-12"><div class="alert alert-danger">Error loading learning suggestions: ' + e.message + '</div></div>';
+                        }
+                    });
+                </script>
             </div>
         </div>
     </div>
