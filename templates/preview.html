@@ -75,22 +75,30 @@
                                 <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left"></i> Back to Dashboard
                                 </a>
-                                {% if document.text_content %}
+                                {% if document.text_content and document_id %}
                                 <a href="{{ url_for('document_chat', document_id=document_id) }}" class="btn btn-outline-primary">
                                     <i class="bi bi-chat-dots"></i> Chat with Document
                                 </a>
                                 <a href="{{ url_for('document_questions', document_id=document_id) }}" class="btn btn-outline-success">
                                     <i class="bi bi-question-circle"></i> Questions & Notes
                                 </a>
+                                {% elif document.text_content %}
+                                <!-- Document hasn't been saved yet, show buttons to proceed with analysis -->
+                                <button type="submit" class="btn btn-primary" form="summarize-form">
+                                    <i class="bi bi-lightning-charge"></i> Analyze Document
+                                </button>
                                 {% endif %}
                             </div>
                             
-                            {% if not document.questions_processed and document.text_content %}
-                            <form method="POST" action="{{ url_for('process_document_questions_route', document_id=document_id) }}">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-lightning-charge"></i> Process Questions
-                                </button>
-                            </form>
+                            <!-- Only show questions form if we have a document_id -->
+                            {% if document_id %}
+                                {% if not document.questions_processed and document.text_content %}
+                                <form method="POST" action="{{ url_for('process_document_questions_route', document_id=document_id) }}">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-lightning-charge"></i> Process Questions
+                                    </button>
+                                </form>
+                                {% endif %}
                             {% endif %}
                         </div>
                         
