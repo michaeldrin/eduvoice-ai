@@ -746,6 +746,98 @@ def generate_learning_suggestions(document_summary):
     except Exception as e:
         logger.exception(f"Error generating learning suggestions: {e}")
         return None, f"Failed to generate learning suggestions: {str(e)}"
+        
+def translate_document(document_text, target_language):
+    """
+    Translate document text to target language and provide language character guides
+    
+    Args:
+        document_text: Text to translate
+        target_language: Target language code (e.g., 'es', 'fr', 'de', 'zh')
+        
+    Returns:
+        Tuple of (translated_text, language_guide, error_message)
+    """
+    try:
+        # Get OpenAI API key from environment variables
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, None, "OpenAI API key not configured. Please contact the administrator."
+        
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+        
+        # Define language information
+        language_info = {
+            'es': {'name': 'Spanish', 'native': 'Español'},
+            'fr': {'name': 'French', 'native': 'Français'},
+            'de': {'name': 'German', 'native': 'Deutsch'},
+            'it': {'name': 'Italian', 'native': 'Italiano'},
+            'pt': {'name': 'Portuguese', 'native': 'Português'},
+            'ru': {'name': 'Russian', 'native': 'Русский'},
+            'zh': {'name': 'Chinese (Simplified)', 'native': '中文'},
+            'ja': {'name': 'Japanese', 'native': '日本語'},
+            'ko': {'name': 'Korean', 'native': '한국어'},
+            'ar': {'name': 'Arabic', 'native': 'العربية'},
+            'hi': {'name': 'Hindi', 'native': 'हिन्दी'},
+            'en': {'name': 'English', 'native': 'English'},
+        }
+        
+        target_lang_name = language_info.get(target_language, {}).get('name', target_language)
+        target_lang_native = language_info.get(target_language, {}).get('native', target_language)
+        
+        # Create prompt for translation
+        trans_prompt = f"""Translate the following text to {target_lang_name} ({target_lang_native}).
+        Maintain the original formatting as much as possible.
+        
+        Text to translate:
+        {document_text[:4000]}  # Limiting to first 4000 chars for token constraints
+        
+        Translated text:"""
+        
+        # Generate translation
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        trans_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a professional translator."},
+                {"role": "user", "content": trans_prompt}
+            ],
+            max_tokens=4000,
+            temperature=0.3
+        )
+        
+        translated_text = trans_response.choices[0].message.content.strip()
+        
+        # Create prompt for language guide
+        guide_prompt = f"""Create a concise language guide for {target_lang_name} with the following sections:
+        
+        1. Alphabet/Character information (especially if non-Latin)
+        2. Basic pronunciation rules (3-4 key points)
+        3. Common phrases (5-6 everyday phrases with pronunciation guides)
+        
+        Format the guide in a structured way with clear headings. Keep it brief but useful for someone encountering this language for the first time."""
+        
+        # Generate language guide
+        guide_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a language education expert."},
+                {"role": "user", "content": guide_prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        language_guide = guide_response.choices[0].message.content.strip()
+        
+        return translated_text, language_guide, None
+        
+    except Exception as e:
+        logger.exception(f"Error translating document: {e}")
+        return None, None, f"Failed to translate document: {str(e)}"
 
 # Simple text similarity search function
 

@@ -48,6 +48,10 @@ class Document(db.Model):
     text_content = db.Column(db.Text, nullable=True)  # Store the extracted text content
     interaction_tips = db.Column(db.Text, nullable=True)  # Store personalized interaction tips
     learning_suggestions = db.Column(db.Text, nullable=True)  # Store next learning suggestions as JSON
+    has_translation = db.Column(db.Boolean, default=False)  # Flag if document has been translated
+    translated_text = db.Column(db.Text, nullable=True)  # Translated text content
+    translation_language = db.Column(db.String(10), nullable=True)  # Language code of translation
+    language_guide = db.Column(db.Text, nullable=True)  # Language character guide
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -67,5 +71,7 @@ class Document(db.Model):
             'has_content': self.text_content is not None,
             'has_tips': self.interaction_tips is not None,
             'has_suggestions': self.learning_suggestions is not None,
+            'has_translation': self.has_translation,
+            'translation_language': self.translation_language,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S')
         }
