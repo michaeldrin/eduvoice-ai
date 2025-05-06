@@ -11,6 +11,11 @@ class ChatMessage(db.Model):
     session_id = db.Column(db.String(255), nullable=False)  # Session ID to track conversations
     message_type = db.Column(db.String(10), nullable=False)  # 'user' or 'assistant'
     content = db.Column(db.Text, nullable=False)
+    has_attachment = db.Column(db.Boolean, default=False)  # Flag to indicate if message has an attachment
+    attachment_filename = db.Column(db.String(255), nullable=True)  # Stored filename of attachment
+    attachment_original_filename = db.Column(db.String(255), nullable=True)  # Original filename of attachment
+    attachment_type = db.Column(db.String(50), nullable=True)  # Type of attachment (pdf, docx, txt, image)
+    attachment_text = db.Column(db.Text, nullable=True)  # Extracted text from attachment
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):
@@ -24,6 +29,10 @@ class ChatMessage(db.Model):
             'session_id': self.session_id,
             'message_type': self.message_type,
             'content': self.content,
+            'has_attachment': self.has_attachment,
+            'attachment_filename': self.attachment_filename,
+            'attachment_original_filename': self.attachment_original_filename,
+            'attachment_type': self.attachment_type,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
 

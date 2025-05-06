@@ -578,14 +578,77 @@ def chat_with_document(document_id):
         if 'session_id' not in session:
             return jsonify({'error': 'Session expired. Please refresh the page.'}), 401
         
-        # Get the message from request
-        data = request.get_json()
-        if not data or 'message' not in data:
-            return jsonify({'error': 'No message provided'}), 400
-        
-        user_message = data['message'].strip()
-        if not user_message:
-            return jsonify({'error': 'Empty message'}), 400
+        # Check if it's a JSON request or a file upload (multipart/form-data)
+        if request.is_json:
+            # Handle standard text message
+            data = request.get_json()
+            if not data or 'message' not in data:
+                return jsonify({'error': 'No message provided'}), 400
+            
+            user_message = data['message'].strip()
+            if not user_message:
+                return jsonify({'error': 'Empty message'}), 400
+                
+            has_attachment = False
+            attachment_filename = None
+            attachment_original_filename = None
+            attachment_type = None
+            attachment_text = None
+        else:
+            # This might be a file upload with form data
+            user_message = request.form.get('message', '').strip()
+            if not user_message and 'file' not in request.files:
+                return jsonify({'error': 'No message or file provided'}), 400
+                
+            # Initialize attachment variables
+            has_attachment = False
+            attachment_filename = None
+            attachment_original_filename = None
+            attachment_type = None
+            attachment_text = None
+            
+            # Check if there's a file attached
+            if 'file' in request.files:
+                file = request.files['file']
+                if file and file.filename and allowed_file(file.filename):
+                    # Process the attachment
+                    has_attachment = True
+                    original_filename = secure_filename(file.filename)
+                    filename_parts = os.path.splitext(original_filename)
+                    extension = filename_parts[1].lower()
+                    
+                    # Generate a unique filename
+                    unique_filename = f"{filename_parts[0]}_{uuid.uuid4().hex}{extension}"
+                    file_path = os.path.join(app.config['ATTACHMENT_FOLDER'], unique_filename)
+                    
+                    # Save the file
+                    file.save(file_path)
+                    
+                    # Set attachment information
+                    attachment_filename = unique_filename
+                    attachment_original_filename = original_filename
+                    
+                    # Determine attachment type and extract text if possible
+                    if extension in ['.pdf']:
+                        attachment_type = 'pdf'
+                        extracted_text, error = extract_text_from_pdf(file_path)
+                        if extracted_text:
+                            attachment_text = extracted_text
+                    elif extension in ['.docx']:
+                        attachment_type = 'docx'
+                        extracted_text, error = extract_text_from_docx(file_path)
+                        if extracted_text:
+                            attachment_text = extracted_text
+                    elif extension in ['.txt']:
+                        attachment_type = 'txt'
+                        extracted_text, error = extract_text_from_txt(file_path)
+                        if extracted_text:
+                            attachment_text = extracted_text
+                    elif extension in ['.jpg', '.jpeg', '.png']:
+                        attachment_type = 'image'
+                        extracted_text, error = extract_text_from_image(file_path)
+                        if extracted_text:
+                            attachment_text = extracted_text
         
         # Retrieve document
         document = Document.query.get(document_id)
@@ -613,18 +676,29 @@ def chat_with_document(document_id):
         # Begin a database transaction to handle potential errors
         db.session.begin_nested()
         
-        # Save user message
+        # Save user message with attachment info if present
         user_chat = ChatMessage(
             document_id=document_id,
             session_id=session['session_id'],
             message_type='user',
-            content=user_message
+            content=user_message,
+            has_attachment=has_attachment,
+            attachment_filename=attachment_filename,
+            attachment_original_filename=attachment_original_filename,
+            attachment_type=attachment_type,
+            attachment_text=attachment_text
         )
         db.session.add(user_chat)
         db.session.commit()
         
+        # Prepare context for AI response
+        # If there's attachment text, include it in the context
+        additional_context = ""
+        if attachment_text:
+            additional_context = f"\n\nThe user has also attached a file with the following content:\n{attachment_text[:2000]}"
+        
         # Generate AI response
-        ai_response, error = generate_chat_response(document_id, user_message)
+        ai_response, error = generate_chat_response(document_id, user_message + additional_context)
         
         # Handle errors during response generation
         if error:
@@ -715,6 +789,28 @@ def dashboard():
     documents = Document.query.filter_by(session_id=session['session_id']).order_by(Document.upload_time.desc()).all()
     
     return render_template('dashboard.html', documents=documents)
+
+# Route to serve chat attachment files
+@app.route('/attachments/<path:filename>')
+def serve_attachment(filename):
+    """Serve attachment files"""
+    # Check if user is in session
+    if 'session_id' not in session:
+        flash("Please login to access attachments")
+        return redirect(url_for('index'))
+    
+    # Check if the attachment exists in database and belongs to current session
+    chat_message = ChatMessage.query.filter_by(
+        attachment_filename=filename,
+        session_id=session['session_id']
+    ).first()
+    
+    if not chat_message:
+        flash("Attachment not found or you don't have permission to access it")
+        return redirect(url_for('index'))
+    
+    # Serve the file
+    return send_from_directory(app.config['ATTACHMENT_FOLDER'], filename)
 
 # Static file routes
 @app.route('/static/<path:path>')
