@@ -204,6 +204,72 @@ def generate_summary(text):
         logger.exception(f"Error generating summary: {e}")
         return None, f"Error generating summary: {str(e)}"
 
+# Simple text similarity search function
+def simple_text_search(query, document_text, chunk_size=1000, overlap=200, top_k=3):
+    """
+    Perform a simple text similarity search to find relevant document chunks
+    
+    Args:
+        query: The search query (user question)
+        document_text: The document text to search within
+        chunk_size: Size of each document chunk
+        overlap: Overlap between chunks
+        top_k: Number of most relevant chunks to return
+    
+    Returns:
+        List of most relevant text chunks
+    """
+    try:
+        # Normalize query (lowercase, remove extra spaces)
+        query = " ".join(query.lower().split())
+        
+        # Break document into overlapping chunks
+        chunks = []
+        doc_length = len(document_text)
+        
+        for i in range(0, doc_length, chunk_size - overlap):
+            chunk = document_text[i:i + chunk_size]
+            if len(chunk) < 100:  # Skip very small chunks
+                continue
+            chunks.append(chunk)
+        
+        # If we have no chunks, return the whole document
+        if not chunks:
+            return [document_text[:5000]]  # Return first 5000 chars
+            
+        # Calculate simple relevance score for each chunk
+        chunk_scores = []
+        query_terms = set(query.split())
+        
+        for i, chunk in enumerate(chunks):
+            chunk_lower = chunk.lower()
+            
+            # Count how many query terms appear in the chunk
+            term_matches = sum(1 for term in query_terms if term in chunk_lower)
+            
+            # Count exact phrase matches (more weight)
+            phrase_matches = chunk_lower.count(query) * 3
+            
+            # Calculate final score
+            score = term_matches + phrase_matches
+            
+            chunk_scores.append((i, score, chunk))
+        
+        # Sort by score (highest first) and take top_k
+        chunk_scores.sort(key=lambda x: x[1], reverse=True)
+        top_chunks = [chunk for _, _, chunk in chunk_scores[:top_k]]
+        
+        # If no chunks matched, return first chunk as fallback
+        if not top_chunks or all(score == 0 for _, score, _ in chunk_scores[:top_k]):
+            return [chunks[0]]
+            
+        return top_chunks
+        
+    except Exception as e:
+        logger.exception(f"Error in similarity search: {e}")
+        # Fallback to first 5000 chars if search fails
+        return [document_text[:5000]]
+
 # Generate response for chat using OpenAI
 def generate_chat_response(document_id, user_message):
     """Generate a response to a user question about a document using OpenAI API"""
@@ -222,14 +288,33 @@ def generate_chat_response(document_id, user_message):
         # Initialize OpenAI client
         client = OpenAI(api_key=api_key)
         
-        # Create system message for context
+        # Perform text similarity search to find relevant chunks
+        relevant_chunks = simple_text_search(
+            user_message, 
+            document.text_content,
+            chunk_size=1500,
+            overlap=300, 
+            top_k=3
+        )
+        
+        # Combine relevant chunks for context (limit total to ~5000 chars)
+        combined_chunks = " ".join(relevant_chunks)
+        if len(combined_chunks) > 5000:
+            combined_chunks = combined_chunks[:5000]
+        
+        # Create system message with enhanced instructions and context
         system_message = f"""You are an AI assistant answering questions about a specific document.
-        Only use the document content to answer questions.
-        If the answer cannot be found in the document, say so politely.
-        Do not make up information or use external knowledge.
+        The following are the most relevant sections of the document related to the user's question.
         
         DOCUMENT CONTENT:
-        {document.text_content[:10000]}  # Limiting to first 10000 chars
+        {combined_chunks}
+        
+        Instructions:
+        1. Only use the document content provided above to answer questions.
+        2. If the answer cannot be found in these document sections, say so politely.
+        3. Do not make up information or use external knowledge.
+        4. If the document content is in a language other than English, answer in that same language.
+        5. Format your response neatly with paragraphs where appropriate.
         """
         
         # Generate response
@@ -371,56 +456,107 @@ def view_document(document_id):
 @app.route('/api/chat/<int:document_id>', methods=['POST'])
 def chat_with_document(document_id):
     """API endpoint for chat functionality"""
-    # Check if user is in session
-    if 'session_id' not in session:
-        return jsonify({'error': 'Session expired'}), 401
-    
-    # Get the message from request
-    data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({'error': 'No message provided'}), 400
-    
-    user_message = data['message']
-    
-    # Retrieve document
-    document = Document.query.get_or_404(document_id)
-    
-    # Check if user owns this document
-    if document.session_id != session['session_id']:
-        return jsonify({'error': 'Unauthorized access'}), 403
-    
-    # Save user message
-    user_chat = ChatMessage(
-        document_id=document_id,
-        session_id=session['session_id'],
-        message_type='user',
-        content=user_message
-    )
-    db.session.add(user_chat)
-    db.session.commit()
-    
-    # Generate AI response
-    ai_response, error = generate_chat_response(document_id, user_message)
-    
-    # Handle errors
-    if error:
-        return jsonify({'error': error}), 500
-    
-    # Save AI response
-    ai_chat = ChatMessage(
-        document_id=document_id,
-        session_id=session['session_id'],
-        message_type='assistant',
-        content=ai_response
-    )
-    db.session.add(ai_chat)
-    db.session.commit()
-    
-    # Return both messages
-    return jsonify({
-        'user_message': user_chat.to_dict(),
-        'ai_response': ai_chat.to_dict()
-    })
+    try:
+        # Check if user is in session
+        if 'session_id' not in session:
+            return jsonify({'error': 'Session expired. Please refresh the page.'}), 401
+        
+        # Get the message from request
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'error': 'No message provided'}), 400
+        
+        user_message = data['message'].strip()
+        if not user_message:
+            return jsonify({'error': 'Empty message'}), 400
+        
+        # Retrieve document
+        document = Document.query.get(document_id)
+        if not document:
+            return jsonify({'error': 'Document not found'}), 404
+            
+        # Check if document has content
+        if not document.text_content:
+            return jsonify({
+                'error': 'This document has no extractable text content',
+                'details': 'The file may be an image-based PDF or contain unsupported formatting.'
+            }), 422
+        
+        # Check if user owns this document
+        if document.session_id != session['session_id']:
+            return jsonify({'error': 'Unauthorized access'}), 403
+        
+        # Check for OpenAI API key
+        if not os.environ.get("OPENAI_API_KEY"):
+            return jsonify({
+                'error': 'OpenAI API key not configured',
+                'details': 'Please contact the administrator to set up the API key.'
+            }), 503
+        
+        # Begin a database transaction to handle potential errors
+        db.session.begin_nested()
+        
+        # Save user message
+        user_chat = ChatMessage(
+            document_id=document_id,
+            session_id=session['session_id'],
+            message_type='user',
+            content=user_message
+        )
+        db.session.add(user_chat)
+        db.session.commit()
+        
+        # Generate AI response
+        ai_response, error = generate_chat_response(document_id, user_message)
+        
+        # Handle errors during response generation
+        if error:
+            # Create an error response message in chat
+            error_message = f"I'm sorry, I couldn't process your request: {error}"
+            
+            ai_chat = ChatMessage(
+                document_id=document_id,
+                session_id=session['session_id'],
+                message_type='assistant',
+                content=error_message
+            )
+            db.session.add(ai_chat)
+            db.session.commit()
+            
+            return jsonify({
+                'user_message': user_chat.to_dict(),
+                'ai_response': ai_chat.to_dict(),
+                'warning': error
+            }), 200  # Still return 200 to display the error in the chat
+        
+        # Save AI response
+        ai_chat = ChatMessage(
+            document_id=document_id,
+            session_id=session['session_id'],
+            message_type='assistant',
+            content=ai_response
+        )
+        db.session.add(ai_chat)
+        db.session.commit()
+        
+        # Return both messages
+        return jsonify({
+            'user_message': user_chat.to_dict(),
+            'ai_response': ai_chat.to_dict()
+        })
+        
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error in chat API: {e}")
+        
+        # Rollback any transaction in progress
+        db.session.rollback()
+        
+        # Return error response
+        return jsonify({
+            'error': 'An unexpected error occurred',
+            'details': str(e)
+        }), 500
 
 @app.route('/download/summary/<int:document_id>')
 def download_summary(document_id):

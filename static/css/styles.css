@@ -61,6 +61,18 @@ body {
     border-bottom-left-radius: 0;
 }
 
+/* Error message style */
+.error-message {
+    color: #f8d7da !important;
+}
+
+.assistant-message .error-message {
+    background-color: rgba(220, 53, 69, 0.2);
+    padding: 5px;
+    border-radius: 4px;
+    border-left: 3px solid #dc3545;
+}
+
 .message-header {
     opacity: 0.9;
 }

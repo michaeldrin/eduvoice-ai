@@ -108,56 +108,124 @@
         const loadingMessage = document.getElementById('loading-message');
         const printSummaryBtn = document.getElementById('print-summary');
         
+        // Variables to track state
+        let isProcessing = false;
+        const MAX_RETRIES = 2;
+        
         // Auto-scroll chat to bottom
         function scrollToBottom() {
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
         }
         scrollToBottom();
         
+        // Focus the input field
+        userMessageInput.focus();
+        
         // Handle chat form submission
         chatForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            // Get the user message and trim whitespace
             const userMessage = userMessageInput.value.trim();
-            if (!userMessage) return;
+            
+            // Validate message
+            if (!userMessage || isProcessing) return;
+            
+            // Set processing flag
+            isProcessing = true;
+            
+            // Disable input and change button to spinner
+            userMessageInput.disabled = true;
+            const submitBtn = chatForm.querySelector('button[type="submit"]');
+            const originalBtnContent = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            submitBtn.disabled = true;
             
             // Clear input
             userMessageInput.value = '';
             
             // Add user message to chat
-            addMessageToChat('user', userMessage);
+            const userMessageElement = addMessageToChat('user', userMessage);
             
             // Show loading indicator
             loadingMessage.classList.remove('d-none');
             scrollToBottom();
             
-            try {
-                // Send request to backend
-                const response = await fetch('/api/chat/{{ document.id }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userMessage })
-                });
-                
-                // Hide loading indicator
-                loadingMessage.classList.add('d-none');
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    // Add AI response to chat
-                    addMessageToChat('assistant', data.ai_response.content);
-                } else {
-                    // Add error message
-                    const errorData = await response.json();
-                    addMessageToChat('assistant', 'Error: ' + (errorData.error || 'Failed to get response'));
+            let retryCount = 0;
+            let success = false;
+            
+            while (retryCount <= MAX_RETRIES && !success) {
+                try {
+                    // Send request to backend
+                    const response = await fetch('/api/chat/{{ document.id }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: userMessage })
+                    });
+                    
+                    // Hide loading indicator
+                    loadingMessage.classList.add('d-none');
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Check for warning in the response
+                        if (data.warning) {
+                            console.warn('API warning:', data.warning);
+                        }
+                        
+                        // Add AI response to chat
+                        addMessageToChat('assistant', data.ai_response.content);
+                        success = true;
+                    } else {
+                        // Try to parse error response
+                        let errorMessage = 'Failed to get response';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                            if (errorData.details) {
+                                errorMessage += `: ${errorData.details}`;
+                            }
+                        } catch (parseError) {
+                            errorMessage = `Error (${response.status}): Failed to get response`;
+                        }
+                        
+                        // If it's a server error (5xx), we can retry
+                        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+                            console.log(`Retry attempt ${retryCount + 1} for server error`);
+                            retryCount++;
+                            await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
+                            continue;
+                        }
+                        
+                        // Add error message for client errors or after max retries
+                        addMessageToChat('assistant', `Error: ${errorMessage}`);
+                        success = true; // We're done trying
+                    }
+                } catch (error) {
+                    // Network error - we can retry
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Retry attempt ${retryCount + 1} for network error: ${error.message}`);
+                        retryCount++;
+                        await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
+                    } else {
+                        // Hide loading indicator
+                        loadingMessage.classList.add('d-none');
+                        
+                        // Add error message after max retries
+                        addMessageToChat('assistant', 'Error: Could not connect to server. Please check your internet connection.');
+                        console.error('Error:', error);
+                        success = true; // We're done trying
+                    }
                 }
-            } catch (error) {
-                // Hide loading indicator
-                loadingMessage.classList.add('d-none');
-                // Add error message
-                addMessageToChat('assistant', 'Error: Could not connect to server');
-                console.error('Error:', error);
             }
+            
+            // Reset UI state
+            userMessageInput.disabled = false;
+            submitBtn.innerHTML = originalBtnContent;
+            submitBtn.disabled = false;
+            userMessageInput.focus();
+            isProcessing = false;
         });
         
         // Add message to chat
@@ -172,6 +240,12 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
             
+            // Handle different types of content (error messages, etc.)
+            const isError = content.toLowerCase().startsWith('error:');
+            if (isError && type === 'assistant') {
+                contentDiv.classList.add('error-message');
+            }
+            
             // Convert text content to HTML with line breaks preserved
             contentDiv.innerHTML = content.replace(/\n/g, '<br>');
             
@@ -181,11 +255,21 @@
             // Add before loading indicator
             chatMessagesContainer.insertBefore(messageDiv, loadingMessage);
             scrollToBottom();
+            
+            return messageDiv;
         }
         
         // Print summary
         printSummaryBtn.addEventListener('click', function() {
             window.print();
+        });
+        
+        // Add Enter key handling (submit on Enter, new line on Shift+Enter)
+        userMessageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
         });
     });
 </script>
