@@ -196,6 +196,19 @@
             </div>
         </div>
         {% endif %}
+        
+        <!-- Sidebar Ad - Desktop -->
+        <div class="ad-container sidebar-ad desktop-only no-print">
+            <ins class="adsbygoogle"
+                 style="display:block"
+                 data-ad-client="ca-pub-XXXXXXXXXXXXX"
+                 data-ad-slot="XXXXXXXXXX"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>
+                 (adsbygoogle = window.adsbygoogle || []).push({});
+            </script>
+        </div>
     </div>
     
     <!-- Summary Panel -->
@@ -216,6 +229,19 @@
             <div class="card-body">
                 <div id="summary-content" class="summary-container">
                     {{ document.summary|nl2br }}
+                </div>
+                
+                <!-- Ad below Summary -->
+                <div class="ad-container summary-ad no-print">
+                    <ins class="adsbygoogle"
+                         style="display:block"
+                         data-ad-client="ca-pub-XXXXXXXXXXXXX"
+                         data-ad-slot="XXXXXXXXXX"
+                         data-ad-format="auto"
+                         data-full-width-responsive="true"></ins>
+                    <script>
+                         (adsbygoogle = window.adsbygoogle || []).push({});
+                    </script>
                 </div>
             </div>
         </div>
@@ -254,11 +280,22 @@
         let isProcessing = false;
         let currentAttachment = null;
         const MAX_RETRIES = 2;
+        let aiMessageCount = 0; // Track AI messages for ad insertion
         
         // Auto-scroll chat to bottom
         function scrollToBottom() {
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
         }
+        
+        // Count existing AI messages for proper ad placement
+        function countExistingAIMessages() {
+            const messages = document.querySelectorAll('.chat-message.assistant-message');
+            return messages.length;
+        }
+        
+        // Initialize AI message count from existing messages
+        aiMessageCount = countExistingAIMessages();
+        
         scrollToBottom();
         
         // Focus the input field
@@ -524,6 +561,36 @@
             
             // Add before loading indicator
             chatMessagesContainer.insertBefore(messageDiv, loadingMessage);
+            
+            // Insert ad after every 3rd AI assistant message
+            if (type === 'assistant' && !isError) {
+                aiMessageCount++;
+                
+                if (aiMessageCount % 3 === 0) {
+                    // Create ad container
+                    const adDiv = document.createElement('div');
+                    adDiv.className = 'ad-container chat-ad no-print';
+                    adDiv.innerHTML = `
+                        <ins class="adsbygoogle"
+                             style="display:block"
+                             data-ad-client="ca-pub-XXXXXXXXXXXXX"
+                             data-ad-slot="XXXXXXXXXX"
+                             data-ad-format="auto"
+                             data-full-width-responsive="true"></ins>
+                    `;
+                    
+                    // Add ad after the message
+                    chatMessagesContainer.insertBefore(adDiv, loadingMessage);
+                    
+                    // Initialize the ad
+                    try {
+                        (adsbygoogle = window.adsbygoogle || []).push({});
+                    } catch (e) {
+                        console.error('Error loading ad:', e);
+                    }
+                }
+            }
+            
             scrollToBottom();
             
             return messageDiv;
