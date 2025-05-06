@@ -2,6 +2,27 @@
 
 {% block title %}{{ document.filename }} - Analysis{% endblock %}
 
+{% block styles %}
+<style>
+    /* Chat message attachment styling */
+    .attachment-indicator {
+        font-size: 0.85rem;
+    }
+    
+    .attachment-indicator .bg-body-tertiary {
+        background-color: rgba(var(--bs-tertiary-bg-rgb), 0.5) !important;
+    }
+    
+    /* Message styles for system responses about attachments */
+    .message-content .attachment-info {
+        font-style: italic;
+        color: var(--bs-secondary-color);
+        margin-top: 6px;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h1>Document Analysis</h1>
@@ -292,8 +313,51 @@
                 contentDiv.classList.add('error-message');
             }
             
-            // Convert text content to HTML with line breaks preserved
-            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            // Check if content contains file attachment indicator
+            const hasAttachment = content.includes('[Attached file:');
+            
+            if (hasAttachment) {
+                // Split content into message and attachment info
+                const parts = content.split(/\[Attached file:/);
+                const messageText = parts[0];
+                const attachmentInfo = parts[1] ? parts[1].replace(']', '') : '';
+                
+                // Create message text element
+                const textElement = document.createElement('div');
+                textElement.innerHTML = messageText.replace(/\n/g, '<br>');
+                
+                // Create attachment element
+                const attachmentElement = document.createElement('div');
+                attachmentElement.className = 'attachment-indicator mt-2';
+                
+                // Determine icon based on file extension
+                let iconClass = 'bi-file-earmark';
+                const fileName = attachmentInfo.trim();
+                
+                if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                    iconClass = 'bi-file-image';
+                } else if (fileName.match(/\.(pdf)$/i)) {
+                    iconClass = 'bi-file-pdf';
+                } else if (fileName.match(/\.(doc|docx)$/i)) {
+                    iconClass = 'bi-file-word';
+                } else if (fileName.match(/\.(txt)$/i)) {
+                    iconClass = 'bi-file-text';
+                }
+                
+                attachmentElement.innerHTML = `
+                    <div class="d-flex align-items-center p-2 bg-body-tertiary rounded">
+                        <i class="bi ${iconClass} me-2"></i>
+                        <span class="small">${fileName}</span>
+                    </div>
+                `;
+                
+                // Add both elements to content div
+                contentDiv.appendChild(textElement);
+                contentDiv.appendChild(attachmentElement);
+            } else {
+                // Convert text content to HTML with line breaks preserved
+                contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            }
             
             messageDiv.appendChild(headerDiv);
             messageDiv.appendChild(contentDiv);
@@ -420,7 +484,7 @@
                         // Create FormData for multipart request
                         const formData = new FormData();
                         formData.append('message', userMessage);
-                        formData.append('attachment', currentAttachment);
+                        formData.append('file', currentAttachment);
                         
                         // Send multipart request
                         response = await fetch('/api/chat/{{ document.id }}', {
