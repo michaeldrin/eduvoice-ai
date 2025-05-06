@@ -33,17 +33,9 @@
               {{ document.summary|safe|truncate(200) }}
             </div>
             <div class="mt-2">
-              {% if document.text_filename %}
-              <a href="{{ url_for('download_summary_text', filename=document.text_filename) }}" class="btn btn-sm btn-outline-info">
+              <a href="{{ url_for('download_summary', document_id=document.id) }}" class="btn btn-sm btn-outline-info">
                 <i class="bi bi-file-text"></i> Download Summary
               </a>
-              {% endif %}
-              
-              {% if document.audio_filename %}
-              <a href="{{ url_for('download_audio', filename=document.audio_filename) }}" class="btn btn-sm btn-outline-info ms-2">
-                <i class="bi bi-file-music"></i> Download Audio
-              </a>
-              {% endif %}
             </div>
           </div>
           {% endif %}
@@ -182,8 +174,8 @@
     const clearChatButton = document.getElementById('clearChat');
     const languageButtons = document.querySelectorAll('.language-btn');
     
-    // Current language for chat (user preference > document language > English)
-    let currentChatLanguage = "{{ preferred_language or (document.language if document and document.language else 'en') }}";
+    // Current language for chat (default to English)
+    let currentChatLanguage = "{{ preferred_language or 'en' }}";
     
     // Scroll to bottom of chat container
     function scrollToBottom() {

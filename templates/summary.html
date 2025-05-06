@@ -93,40 +93,15 @@
                                     </div>
                                     <div class="summary-content mb-4" id="summary-content">{{ summary|safe }}</div>
                                     
-                                    {% if text_filename %}
                                     <div class="download-button-container mb-4 text-end">
-                                        <a href="{{ url_for('download_summary_text', filename=text_filename) }}" 
+                                        <a href="{{ url_for('download_summary', document_id=session.get('last_document_id', 0)) }}" 
                                            class="btn btn-success btn-sm">
                                             <i class="bi bi-file-text"></i> Download Summary (TXT)
                                         </a>
                                     </div>
-                                    {% endif %}
                                     
-                                    {% if audio_file %}
-                                    <div class="audio-player-wrapper">
-                                        <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <h6 class="mb-0"><i class="bi bi-volume-up"></i> Listen to the summary:</h6>
-                                            <a href="{{ url_for('download_audio', filename=audio_file) }}"
-                                               class="btn btn-info btn-sm">
-                                                <i class="bi bi-file-music"></i> Download Audio (MP3)
-                                            </a>
-                                        </div>
-                                        
-                                        <audio controls class="w-100" id="audio-player">
-                                            <source src="{{ url_for('static', filename='audio/' + audio_file) }}" type="audio/mpeg">
-                                            Your browser does not support the audio element.
-                                        </audio>
-                                        
-                                        <!-- Audio visualizer -->
-                                        <div class="visualizer-container visualizer-glow mt-3">
-                                            <canvas id="visualizer"></canvas>
-                                        </div>
-                                        
-                                        <div class="text-muted mt-2">
-                                            <small>Text-to-speech generated using Google's TTS</small>
-                                        </div>
-                                    </div>
-                                    {% elif audio_error %}
+                                    <!-- Audio player will be enabled in a future update -->
+                                    {% if audio_error %}
                                     <div class="alert alert-warning mt-3" role="alert">
                                         <i class="bi bi-exclamation-triangle"></i> {{ audio_error }}
                                     </div>
@@ -223,10 +198,7 @@
     <!-- Accessibility JS -->
     <script src="{{ url_for('static', filename='js/accessibility.js') }}"></script>
     
-    <!-- Audio Visualizer JS -->
-    {% if audio_file %}
-    <script src="{{ url_for('static', filename='js/audio-visualizer.js') }}"></script>
-    {% endif %}
+    <!-- Audio Visualizer feature will be added in future updates -->
     
     <!-- Translation functionality -->
     <script>
@@ -237,8 +209,8 @@
         const translationStatus = document.getElementById('translation-status');
         const documentId = {{ session.get('last_document_id', 0) }};
         
-        // Current language (default to document's original language)
-        let currentLanguage = "{{ document.language if document and document.language else 'en' }}";
+        // Default language is English
+        let currentLanguage = "en";
         
         // Original summary content
         const originalSummary = summaryContent.innerHTML;
