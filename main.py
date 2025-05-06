@@ -109,6 +109,21 @@ OCR_LANGUAGES = {
     'jpn': 'Japanese',
     'kor': 'Korean'
 }
+
+# Define supported translation languages
+TRANSLATION_LANGUAGES = {
+    'es': {'name': 'Spanish', 'native': 'Español', 'flag': '🇪🇸'},
+    'fr': {'name': 'French', 'native': 'Français', 'flag': '🇫🇷'},
+    'de': {'name': 'German', 'native': 'Deutsch', 'flag': '🇩🇪'},
+    'it': {'name': 'Italian', 'native': 'Italiano', 'flag': '🇮🇹'},
+    'pt': {'name': 'Portuguese', 'native': 'Português', 'flag': '🇵🇹'},
+    'ru': {'name': 'Russian', 'native': 'Русский', 'flag': '🇷🇺'},
+    'zh': {'name': 'Chinese', 'native': '中文', 'flag': '🇨🇳'},
+    'ja': {'name': 'Japanese', 'native': '日本語', 'flag': '🇯🇵'},
+    'ko': {'name': 'Korean', 'native': '한국어', 'flag': '🇰🇷'},
+    'ar': {'name': 'Arabic', 'native': 'العربية', 'flag': '🇸🇦'},
+    'hi': {'name': 'Hindi', 'native': 'हिन्दी', 'flag': '🇮🇳'}
+}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['ATTACHMENT_FOLDER'] = ATTACHMENT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
