@@ -245,9 +245,12 @@
                         <i class="bi bi-printer"></i> Print Summary
                     </button>
                     <a href="{{ url_for('download_summary', document_id=document.id) }}" 
-                       class="btn btn-sm btn-light">
+                       class="btn btn-sm btn-light me-2">
                         <i class="bi bi-download"></i> Download
                     </a>
+                    <button id="generate-flashcards" class="btn btn-sm btn-info">
+                        <i class="bi bi-card-heading"></i> Generate Flashcards
+                    </button>
                 </div>
             </div>
             <div class="card-body">
