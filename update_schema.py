@@ -79,7 +79,7 @@ try:
                 elif isinstance(column_type, String):
                     sql += f" VARCHAR({column_type.length})"
                 elif isinstance(column_type, Text):
-                    sql += " TEXT"
+                    sql += " TEXT"  # Text type doesn't need length
                 
                 # Add constraints
                 if not nullable:
