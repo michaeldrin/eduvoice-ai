@@ -23,4 +23,5 @@ dependencies = [
     "trafilatura>=2.0.0",
     "pytesseract>=0.3.13",
     "pillow>=11.2.1",
+    "sqlalchemy>=2.0.40",
 ]
