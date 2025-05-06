@@ -2105,6 +2105,51 @@ def server_error(error):
     return render_template('error.html', error="Internal server error"), 500
 
 # Translation API endpoint
+@app.route('/api/regenerate-tips/<int:document_id>', methods=['POST'])
+@db_retry()
+def regenerate_tips_api(document_id):
+    """API endpoint to regenerate document interaction tips"""
+    try:
+        # Verify document exists
+        document = Document.query.get(document_id)
+        if not document:
+            logger.error(f"Document not found: {document_id}")
+            return jsonify({"error": "Document not found"}), 404
+            
+        # Verify user has access to this document
+        if document.session_id != session.get('session_id'):
+            logger.warning(f"Unauthorized access attempt to document: {document_id}")
+            return jsonify({"error": "Unauthorized access"}), 403
+            
+        # Generate new tips based on document summary
+        new_tips, error = generate_interaction_tips(document.summary, document.filetype)
+        
+        if error:
+            logger.error(f"Error regenerating tips: {error}")
+            return jsonify({"error": "Failed to generate new tips"}), 500
+            
+        # Update document with new tips
+        document.interaction_tips = new_tips
+        db.session.commit()
+        logger.info(f"Tips regenerated for document {document_id}")
+        
+        # Also update session storage if this document is in session
+        if 'uploads' in session:
+            for i, doc in enumerate(session['uploads']):
+                if str(doc.get('id')) == str(document_id):
+                    session['uploads'][i]['interaction_tips'] = new_tips
+                    session.modified = True
+                    logger.debug(f"Updated tips in session for document {document_id}")
+                    break
+        
+        # Return new tips
+        return jsonify({"tips": new_tips}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.exception(f"Error in regenerate_tips_api: {e}")
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
 @app.route('/api/translate/<int:document_id>', methods=['POST'])
 @db_retry()
 def translate_document_api(document_id):

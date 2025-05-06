@@ -144,6 +144,17 @@
         max-height: 500px;
         overflow-y: auto;
     }
+    
+    /* Animation for new tips */
+    @keyframes highlightTips {
+        0% { background-color: rgba(var(--bs-info-rgb), 0.2); }
+        100% { background-color: transparent; }
+    }
+    
+    .highlight-new {
+        animation: highlightTips 2s ease-out;
+        border-radius: 0.25rem;
+    }
 </style>
 {% endblock %}
 
@@ -1010,6 +1021,79 @@
                     translatedContent.classList.add('d-none');
                     originalContent.classList.remove('d-none');
                     toggleTranslationBtn.innerHTML = '<i class="bi bi-translate"></i> View Translation';
+                }
+            });
+        }
+        
+        // Handle regenerate tips button functionality
+        if (regenerateTipsBtn) {
+            regenerateTipsBtn.addEventListener('click', async function() {
+                // Show loading state
+                const originalBtnText = this.innerHTML;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+                this.disabled = true;
+                
+                const tipsContainer = document.querySelector('.personalized-tips');
+                const originalTips = tipsContainer.innerHTML;
+                
+                // Add loading animation to tips container
+                tipsContainer.innerHTML = `
+                    <div class="text-center p-3">
+                        <div class="spinner-border text-info" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Generating new personalized tips...</p>
+                    </div>
+                `;
+                
+                try {
+                    // Request new tips from server
+                    const response = await fetch(`/api/regenerate-tips/{{ document.id }}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        if (data.tips) {
+                            // Replace tips content with new tips
+                            tipsContainer.innerHTML = data.tips.replace(/\n/g, '<br>');
+                            
+                            // Add subtle highlight animation for new tips
+                            tipsContainer.classList.add('highlight-new');
+                            setTimeout(() => {
+                                tipsContainer.classList.remove('highlight-new');
+                            }, 2000);
+                        } else {
+                            // If no tips were returned, restore original content
+                            tipsContainer.innerHTML = originalTips;
+                            throw new Error('Failed to generate new tips');
+                        }
+                    } else {
+                        // If request failed, restore original content
+                        tipsContainer.innerHTML = originalTips;
+                        
+                        // Get error message if available
+                        let errorMessage = 'Failed to generate new tips';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                        } catch (e) {
+                            console.error('Could not parse error response', e);
+                        }
+                        
+                        throw new Error(errorMessage);
+                    }
+                } catch (error) {
+                    console.error('Error regenerating tips:', error);
+                    
+                    // Show error message
+                    alert(`Error: ${error.message}`);
+                } finally {
+                    // Reset button state
+                    this.innerHTML = originalBtnText;
+                    this.disabled = false;
                 }
             });
         }
