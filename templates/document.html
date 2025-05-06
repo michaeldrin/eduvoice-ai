@@ -170,11 +170,8 @@
                         </div>
                     {% endif %}
                     <div id="loading-message" class="chat-message assistant-message d-none">
-                        <div class="d-flex align-items-center">
-                            <div class="spinner-border spinner-border-sm me-2" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <span>Thinking...</span>
+                        <div id="ai-skeleton-container">
+                            <!-- Skeleton will be inserted here via JS -->
                         </div>
                     </div>
                 </div>
@@ -307,6 +304,7 @@
         const userMessageInput = document.getElementById('user-message');
         const chatMessagesContainer = document.getElementById('chat-messages');
         const loadingMessage = document.getElementById('loading-message');
+        const aiSkeletonContainer = document.getElementById('ai-skeleton-container');
         const printSummaryBtn = document.getElementById('print-summary');
         const tipsCollapseIcon = document.getElementById('tipsCollapseIcon');
         const interactionTipsContent = document.getElementById('interactionTipsContent');
@@ -409,7 +407,9 @@
             // Add user message to chat
             const userMessageElement = addMessageToChat('user', displayMessage);
             
-            // Show loading indicator
+            // Show loading indicator with skeleton
+            aiSkeletonContainer.innerHTML = ''; // Clear previous skeleton
+            skeletonLoader.createChatSkeleton('ai-skeleton-container', true);
             loadingMessage.classList.remove('d-none');
             scrollToBottom();
             
@@ -648,6 +648,12 @@
                 const originalBtnContent = generateFlashcardsBtn.innerHTML;
                 generateFlashcardsBtn.disabled = true;
                 generateFlashcardsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+                
+                // Create skeleton loader for flashcards in the summary area
+                const summaryContent = document.getElementById('summary-content');
+                const originalSummaryContent = summaryContent.innerHTML;
+                summaryContent.innerHTML = '<div id="flashcards-skeleton-container"></div>';
+                skeletonLoader.createCardSkeleton('flashcards-skeleton-container');
                 
                 try {
                     // Call API to generate flashcards
