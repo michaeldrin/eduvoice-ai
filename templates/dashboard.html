@@ -5,14 +5,21 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Your Documents</h1>
-    <a href="{{ url_for('index') }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Upload New Document
-    </a>
+    <div>
+        {% if show_history_controls and session_documents|length > 0 %}
+        <a href="{{ url_for('clear_history') }}" class="btn btn-outline-danger me-2">
+            <i class="bi bi-trash"></i> Clear History
+        </a>
+        {% endif %}
+        <a href="{{ url_for('index') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Upload New Document
+        </a>
+    </div>
 </div>
 
-{% if documents|length > 0 %}
+{% if session_documents|length > 0 %}
     <div class="row">
-        {% for document in documents %}
+        {% for document in session_documents %}
             <div class="col-md-6 col-lg-4 mb-4">
                 <div class="card h-100">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -21,6 +28,8 @@
                                 <i class="bi bi-file-pdf text-danger"></i>
                             {% elif document.filetype == 'docx' %}
                                 <i class="bi bi-file-word text-primary"></i>
+                            {% elif document.filetype in ['jpg', 'jpeg', 'png'] %}
+                                <i class="bi bi-file-image text-success"></i>
                             {% else %}
                                 <i class="bi bi-file-text"></i>
                             {% endif %}
@@ -32,8 +41,8 @@
                             <small class="text-muted">Uploaded: {{ document.upload_time }}</small>
                         </p>
                         {% if document.summary %}
-                            <p class="card-text text-truncate">
-                                {{ document.summary|striptags|truncate(100) }}
+                            <p class="card-text">
+                                {{ document.summary|striptags|truncate(200) }}
                             </p>
                         {% else %}
                             <p class="card-text text-muted">
@@ -41,9 +50,11 @@
                             </p>
                         {% endif %}
                     </div>
-                    <div class="card-footer">
+                    <div class="card-footer d-flex justify-content-between">
                         <a href="{{ url_for('view_document', document_id=document.id) }}" 
                            class="btn btn-primary btn-sm">View Analysis</a>
+                        <a href="{{ url_for('view_document', document_id=document.id) }}#chat" 
+                           class="btn btn-outline-secondary btn-sm">Resume Chat</a>
                     </div>
                 </div>
             </div>
@@ -57,7 +68,7 @@
         <img src="{{ url_for('static', filename='images/empty.svg') }}" 
              alt="No documents" style="max-width: 200px; margin-bottom: 20px;">
         <h3>Get started by uploading your first document</h3>
-        <p class="text-muted">Upload PDFs or DOCX files to analyze them with AI.</p>
+        <p class="text-muted">Upload PDFs, DOCX, TXT files, or images to analyze them with AI.</p>
         <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-2">
             <i class="bi bi-upload"></i> Upload Document
         </a>

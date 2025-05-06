@@ -697,16 +697,30 @@ def view_document(document_id):
         flash("You don't have permission to view this document")
         return redirect(url_for('index'))
     
-    # Retrieve chat history
+    # Retrieve chat history from database
     chat_messages = ChatMessage.query.filter_by(
         document_id=document_id,
         session_id=session['session_id']
     ).order_by(ChatMessage.created_at).all()
     
+    # Initialize chat history in session if not exists
+    if 'chat_history' not in session:
+        session['chat_history'] = {}
+    
+    # If we don't have chat history for this document in session, initialize it
+    doc_id_str = str(document_id)
+    if doc_id_str not in session['chat_history']:
+        session['chat_history'][doc_id_str] = []
+        session.modified = True
+    
+    # Convert database messages to dict format for template rendering
+    db_messages = [msg.to_dict() for msg in chat_messages]
+    
     return render_template(
         'document.html',
         document=document,
-        chat_messages=[msg.to_dict() for msg in chat_messages]
+        chat_messages=db_messages,
+        session_chat_history=session['chat_history'].get(doc_id_str, [])
     )
 
 @app.route('/api/chat/<int:document_id>', methods=['POST'])
@@ -1005,6 +1019,22 @@ def serve_attachment(filename):
     
     # Serve the file
     return send_from_directory(app.config['ATTACHMENT_FOLDER'], filename)
+
+# Route to clear session history
+@app.route('/clear-history')
+def clear_history():
+    """Clear session history of uploads and chat"""
+    if 'uploads' in session:
+        session.pop('uploads')
+    
+    if 'chat_history' in session:
+        session.pop('chat_history')
+    
+    # Make sure to persist changes
+    session.modified = True
+    
+    flash("Your browsing history has been cleared.", "success")
+    return redirect(url_for('dashboard'))
 
 # Static file routes
 @app.route('/static/<path:path>')

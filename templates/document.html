@@ -91,7 +91,8 @@
             </div>
             <div class="card-body d-flex flex-column p-0">
                 <div id="chat-messages" class="chat-container p-3">
-                    {% if chat_messages|length > 0 %}
+                    {% if chat_messages|length > 0 or session_chat_history|length > 0 %}
+                        <!-- Display database chat messages -->
                         {% for message in chat_messages %}
                             <div class="chat-message {% if message.message_type == 'user' %}user-message{% else %}assistant-message{% endif %}">
                                 <div class="message-header small mb-1">
@@ -125,6 +126,29 @@
                                                  alt="{{ message.attachment_original_filename }}">
                                         </div>
                                         {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        
+                        <!-- Display session chat history -->
+                        {% for message in session_chat_history %}
+                            <div class="chat-message {% if message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                                <div class="message-header small mb-1">
+                                    <strong>{% if message.role == 'user' %}You{% else %}AI Assistant{% endif %}</strong>
+                                    {% if message.timestamp %}
+                                    <span class="text-muted ms-2" title="{{ message.timestamp }}">{{ message.timestamp }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="message-content">
+                                    {{ message.content|nl2br }}
+                                    {% if message.has_attachment %}
+                                    <div class="attachment-indicator mt-2">
+                                        <div class="d-flex align-items-center p-2 bg-body-tertiary rounded">
+                                            <i class="bi bi-paperclip me-2"></i>
+                                            <span class="small">File attached</span>
+                                        </div>
                                     </div>
                                     {% endif %}
                                 </div>
