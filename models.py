@@ -57,6 +57,7 @@ class Document(db.Model):
     translated_summary = db.Column(db.Text, nullable=True)  # Translated summary
     translated_content = db.Column(db.Text, nullable=True)  # Translated content
     translation_language = db.Column(db.String(10), nullable=True)  # Language code of translation
+    translated_language = db.Column(db.String(10), nullable=True)  # Legacy column for compatibility
     language_guide = db.Column(db.Text, nullable=True)  # Language character guide
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -79,6 +80,7 @@ class Document(db.Model):
             'has_suggestions': self.learning_suggestions is not None,
             'has_translation': self.has_translation,
             'translation_language': self.translation_language,
+            'translated_language': self.translated_language,
             'language': self.language,
             'text_filename': self.text_filename,
             'audio_filename': self.audio_filename,
