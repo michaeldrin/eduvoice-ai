@@ -211,8 +211,14 @@
             // Clear input
             userMessageInput.value = '';
             
+            // Create display message (show attachment indicator if present)
+            let displayMessage = userMessage;
+            if (currentAttachment) {
+                displayMessage += `\n[Attached file: ${currentAttachment.name}]`;
+            }
+            
             // Add user message to chat
-            const userMessageElement = addMessageToChat('user', userMessage);
+            const userMessageElement = addMessageToChat('user', displayMessage);
             
             // Show loading indicator
             loadingMessage.classList.remove('d-none');
@@ -223,11 +229,31 @@
             
             while (retryCount <= MAX_RETRIES && !success) {
                 try {
-                    // Send request to backend
-                    const response = await fetch('/api/chat/{{ document.id }}', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: userMessage })
+                    let response;
+                    
+                    // Handle request based on whether there's an attachment
+                    if (currentAttachment) {
+                        // Create FormData for multipart request
+                        const formData = new FormData();
+                        formData.append('message', userMessage);
+                        formData.append('file', currentAttachment);
+                        
+                        // Send multipart request
+                        response = await fetch('/api/chat/{{ document.id }}', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        // Clear the attachment after sending
+                        fileUploadInput.value = '';
+                        currentAttachment = null;
+                        attachmentPreview.classList.add('d-none');
+                    } else {
+                        // Send JSON request for message-only
+                        response = await fetch('/api/chat/{{ document.id }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: userMessage })
                     });
                     
                     // Hide loading indicator
@@ -436,74 +462,7 @@
             attachmentPreview.classList.add('d-none');
         });
         
-        // Update the chat form submission to handle file uploads
-        chatForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            // Get the user message and trim whitespace
-            const userMessage = userMessageInput.value.trim();
-            
-            // Validate message
-            if (!userMessage || isProcessing) return;
-            
-            // Set processing flag
-            isProcessing = true;
-            
-            // Disable input and change button to spinner
-            userMessageInput.disabled = true;
-            const submitBtn = chatForm.querySelector('button[type="submit"]');
-            const originalBtnContent = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-            submitBtn.disabled = true;
-            
-            // Clear input
-            userMessageInput.value = '';
-            
-            // Create display message (show attachment indicator if present)
-            let displayMessage = userMessage;
-            if (currentAttachment) {
-                displayMessage += `\n[Attached file: ${currentAttachment.name}]`;
-            }
-            
-            // Add user message to chat
-            const userMessageElement = addMessageToChat('user', displayMessage);
-            
-            // Show loading indicator
-            loadingMessage.classList.remove('d-none');
-            scrollToBottom();
-            
-            let retryCount = 0;
-            let success = false;
-            
-            while (retryCount <= MAX_RETRIES && !success) {
-                try {
-                    let response;
-                    
-                    // Handle request based on whether there's an attachment
-                    if (currentAttachment) {
-                        // Create FormData for multipart request
-                        const formData = new FormData();
-                        formData.append('message', userMessage);
-                        formData.append('file', currentAttachment);
-                        
-                        // Send multipart request
-                        response = await fetch('/api/chat/{{ document.id }}', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        // Clear the attachment after sending
-                        fileUploadInput.value = '';
-                        currentAttachment = null;
-                        attachmentPreview.classList.add('d-none');
-                    } else {
-                        // Send JSON request for message-only
-                        response = await fetch('/api/chat/{{ document.id }}', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ message: userMessage })
-                        });
-                    }
+        // File upload handlers already implemented above
                     
                     // Hide loading indicator
                     loadingMessage.classList.add('d-none');
