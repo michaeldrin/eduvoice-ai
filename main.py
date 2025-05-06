@@ -110,7 +110,7 @@ OCR_LANGUAGES = {
     'kor': 'Korean'
 }
 
-# Define supported translation languages
+# Define supported translation languages with flags and native names
 TRANSLATION_LANGUAGES = {
     'es': {'name': 'Spanish', 'native': 'Español', 'flag': '🇪🇸'},
     'fr': {'name': 'French', 'native': 'Français', 'flag': '🇫🇷'},
@@ -118,11 +118,12 @@ TRANSLATION_LANGUAGES = {
     'it': {'name': 'Italian', 'native': 'Italiano', 'flag': '🇮🇹'},
     'pt': {'name': 'Portuguese', 'native': 'Português', 'flag': '🇵🇹'},
     'ru': {'name': 'Russian', 'native': 'Русский', 'flag': '🇷🇺'},
-    'zh': {'name': 'Chinese', 'native': '中文', 'flag': '🇨🇳'},
+    'zh': {'name': 'Chinese (Simplified)', 'native': '中文', 'flag': '🇨🇳'},
     'ja': {'name': 'Japanese', 'native': '日本語', 'flag': '🇯🇵'},
     'ko': {'name': 'Korean', 'native': '한국어', 'flag': '🇰🇷'},
     'ar': {'name': 'Arabic', 'native': 'العربية', 'flag': '🇸🇦'},
-    'hi': {'name': 'Hindi', 'native': 'हिन्दी', 'flag': '🇮🇳'}
+    'hi': {'name': 'Hindi', 'native': 'हिन्दी', 'flag': '🇮🇳'},
+    'en': {'name': 'English', 'native': 'English', 'flag': '🇺🇸'}
 }
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['ATTACHMENT_FOLDER'] = ATTACHMENT_FOLDER
@@ -1278,7 +1279,11 @@ def view_document(document_id):
                 chat_messages=[],
                 session_chat_history=session['chat_history'].get(doc_id_str, []),
                 has_flashcards=has_flashcards,
-                is_session_only=True
+                is_session_only=True,
+                translation_languages=TRANSLATION_LANGUAGES,
+                view_translation=False,
+                language_code=None,
+                language_info={}
             )
         else:
             # Regular DB document - convert to int for database query
@@ -1336,7 +1341,11 @@ def view_document(document_id):
                 document=document,
                 chat_messages=db_messages,
                 session_chat_history=session['chat_history'].get(doc_id_str, []),
-                has_flashcards=has_flashcards
+                has_flashcards=has_flashcards,
+                translation_languages=TRANSLATION_LANGUAGES,
+                view_translation=False,
+                language_code=None,
+                language_info={}
             )
         
     except Exception as e:

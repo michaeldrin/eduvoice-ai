@@ -907,7 +907,7 @@
                 generateQuizBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
                 
                 // Create skeleton loader for quiz in the summary area
-                const summaryContent = document.getElementById('summary-content');
+                const summaryContent = document.getElementById('summary-content') || document.getElementById('translated-content');
                 const originalSummaryContent = summaryContent.innerHTML;
                 summaryContent.innerHTML = '<div id="quiz-skeleton-container"></div>';
                 skeletonLoader.createMultipleCardSkeletons('quiz-skeleton-container', 3, 4);
@@ -949,6 +949,85 @@
                 }
             });
         }
+        
+        // Handle translation toggle
+        const toggleTranslationBtn = document.getElementById('toggle-translation');
+        if (toggleTranslationBtn) {
+            toggleTranslationBtn.addEventListener('click', function() {
+                const translatedContent = document.getElementById('translated-content');
+                const originalContent = document.getElementById('original-content');
+                
+                if (translatedContent.classList.contains('d-none')) {
+                    // Show translation, hide original
+                    translatedContent.classList.remove('d-none');
+                    originalContent.classList.add('d-none');
+                    toggleTranslationBtn.innerHTML = '<i class="bi bi-translate"></i> View Original';
+                } else {
+                    // Show original, hide translation
+                    translatedContent.classList.add('d-none');
+                    originalContent.classList.remove('d-none');
+                    toggleTranslationBtn.innerHTML = '<i class="bi bi-translate"></i> View Translation';
+                }
+            });
+        }
+        
+        // Handle translation dropdown functionality
+        const translateBtns = document.querySelectorAll('.translate-btn');
+        translateBtns.forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const language = this.getAttribute('data-lang');
+                const documentId = '{{ document.id }}';
+                
+                // Save the original button content
+                const originalBtnContent = this.innerHTML;
+                
+                // Disable all translation buttons and show loading spinner
+                translateBtns.forEach(b => b.disabled = true);
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Translating...';
+                
+                try {
+                    // Get the summary content to show loading state
+                    const summaryContent = document.getElementById('summary-content') || document.getElementById('translated-content');
+                    const originalSummaryContent = summaryContent.innerHTML;
+                    
+                    // Show translation loading skeleton
+                    summaryContent.innerHTML = '<div id="translation-skeleton-container"></div>';
+                    skeletonLoader.createDocumentSkeleton('translation-skeleton-container', 10);
+                    
+                    // Call the translation API
+                    const response = await fetch(`/api/translate/${documentId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ language: language })
+                    });
+                    
+                    // Parse the response
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Redirect to the translated document view
+                        window.location.href = `/document/${documentId}/translate/${language}`;
+                    } else {
+                        // Show error alert
+                        alert(`Translation failed: ${data.error || 'Unknown error'}`);
+                        
+                        // Restore original summary content
+                        summaryContent.innerHTML = originalSummaryContent;
+                    }
+                } catch (error) {
+                    console.error('Translation error:', error);
+                    alert(`Translation failed: ${error.message}`);
+                } finally {
+                    // Re-enable all translation buttons
+                    translateBtns.forEach(b => b.disabled = false);
+                    
+                    // Restore original button content
+                    this.innerHTML = originalBtnContent;
+                }
+            });
+        });
     });
 </script>
 {% endblock %}
