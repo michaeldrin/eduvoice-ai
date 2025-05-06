@@ -53,6 +53,13 @@ def nl2br(value):
         return value.replace('\n', '<br>')
     return value
 
+# Add global template variables
+@app.context_processor
+def inject_global_variables():
+    return {
+        'current_year': datetime.now().year
+    }
+
 # Configure upload folder and allowed extensions
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
@@ -70,7 +77,9 @@ os.makedirs('static/summaries', exist_ok=True)
 
 # Initialize database
 with app.app_context():
+    # Create tables (they should already exist from SQL initialization)
     db.create_all()
+    logger.info("Database tables initialized successfully")
 
 # Helper function to check allowed file extensions
 def allowed_file(filename):

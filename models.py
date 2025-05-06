@@ -5,6 +5,7 @@ db = SQLAlchemy()
 
 class ChatMessage(db.Model):
     """Model for document chat messages"""
+    __tablename__ = 'chat_message'
     id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey('document.id'), nullable=False)
     session_id = db.Column(db.String(255), nullable=False)  # Session ID to track conversations
@@ -28,7 +29,9 @@ class ChatMessage(db.Model):
 
 class Document(db.Model):
     """Model for uploaded documents and their summaries"""
+    __tablename__ = 'document'
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(255), nullable=True)  # For future use with user authentication
     session_id = db.Column(db.String(255), nullable=False)  # Session ID to track ownership
     filename = db.Column(db.String(255), nullable=False)
     filetype = db.Column(db.String(50), nullable=False)
