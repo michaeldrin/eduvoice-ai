@@ -114,6 +114,36 @@
         align-items: center;
         gap: 8px;
     }
+    
+    /* Styling for Interaction Tips */
+    .interaction-tips-card {
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        border: none;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .interaction-tips-card:hover {
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .interaction-tips-card .card-header {
+        border-radius: 0.5rem 0.5rem 0 0;
+        padding: 0.75rem 1.25rem;
+    }
+    
+    .personalized-tips {
+        font-size: 0.95rem;
+    }
+    
+    .personalized-tips strong {
+        color: var(--bs-info);
+    }
+    
+    .tips-container {
+        max-height: 500px;
+        overflow-y: auto;
+    }
 </style>
 {% endblock %}
 
@@ -271,22 +301,34 @@
             </div>
         </div>
         
-        <!-- Interaction Tips Panel -->
+        <!-- Personalized AI Document Interaction Tips Sidebar -->
         {% if document.interaction_tips %}
         <div class="card mt-4 no-print interaction-tips-card">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <h2 class="h5 mb-0">Interaction Tips</h2>
+                <h2 class="h5 mb-0"><i class="bi bi-lightbulb-fill me-2"></i>Smart Interaction Tips</h2>
                 <button type="button" class="btn btn-sm btn-light" 
                         data-bs-toggle="collapse" 
                         data-bs-target="#interactionTipsContent" 
-                        aria-expanded="true">
+                        aria-expanded="true"
+                        title="Toggle tips visibility">
                     <i class="bi bi-chevron-up" id="tipsCollapseIcon"></i>
                 </button>
             </div>
             <div class="collapse show" id="interactionTipsContent">
-                <div class="card-body">
-                    <div class="tips-container">
-                        {{ document.interaction_tips|nl2br }}
+                <div class="card-body p-0">
+                    <div class="tips-container p-3">
+                        <div class="mb-2 text-muted small">
+                            <i class="bi bi-info-circle-fill me-1"></i>
+                            Personalized tips based on your document content:
+                        </div>
+                        <div class="personalized-tips">
+                            {{ document.interaction_tips|nl2br|safe }}
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light p-2 d-flex justify-content-end">
+                        <button type="button" id="regenerate-tips" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-arrow-repeat me-1"></i>Refresh Tips
+                        </button>
                     </div>
                 </div>
             </div>
@@ -485,6 +527,7 @@
         const attachmentPreview = document.getElementById('attachment-preview');
         const attachmentName = document.getElementById('attachment-name');
         const removeAttachmentBtn = document.getElementById('remove-attachment');
+        const regenerateTipsBtn = document.getElementById('regenerate-tips');
         
         // Variables to track state
         let isProcessing = false;

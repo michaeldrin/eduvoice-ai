@@ -708,28 +708,52 @@ def generate_interaction_tips(document_summary, filetype):
         # Initialize OpenAI client
         client = OpenAI(api_key=api_key)
         
-        # Create prompt for generating tips
-        prompt = f"""Based on the following document summary, generate 5 personalized tips for interacting with and learning from this document.
-        These tips should help the user ask better questions and get more value from the AI chat feature.
-        Each tip should be specific to the document content, not generic advice.
-        Format the response as a list of tips, each starting with a number and a brief title, followed by a short explanation.
+        # Create system prompt for generating tips
+        system_prompt = """You are an expert educational guide that helps users interact with documents effectively.
+        Your goal is to provide personalized, insightful tips that help the user extract maximum value from their document through AI interactions.
+        Focus on making tips that are:
+        1. Specific to the document's content and subject matter
+        2. Written in a friendly, encouraging tone
+        3. Actionable and practical
+        4. Educational and promote deeper learning
+        """
+        
+        # Create user prompt for generating tips
+        user_prompt = f"""Based on the following document summary, create 5 personalized tips to help the user interact with and learn from this document.
+        These tips should help the user ask better questions, explore key concepts, and get maximum value from the AI chat feature.
+        
+        For each tip, provide:
+        1. A short, catchy title (3-5 words) that encapsulates the tip
+        2. An emoji that represents the tip (choose from 📚 🔍 💡 🗣️ 🧠 📝 🔄 📊 🔬 🧩)
+        3. A concise explanation (1-2 sentences) of how to apply this tip
+        
+        Format your response as a list of 5 numbered tips with the following structure for each tip:
+        
+        **[NUMBER]. [EMOJI] [TITLE]**
+        [EXPLANATION]
         
         Document type: {filetype}
-        Document summary: {document_summary[:1000]}  # Limiting to first 1000 chars
-        
-        INTERACTION TIPS:"""
+        Document summary: {document_summary[:1000]}
+        """
         
         # Generate tips
         # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
         # do not change this unless explicitly requested by the user
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=1000,
             temperature=0.7
         )
         
         tips = response.choices[0].message.content.strip()
+        
+        # Log the tips for debugging
+        logger.info(f"Generated interaction tips: {tips[:100]}...")
+        
         return tips, None
         
     except Exception as e:
