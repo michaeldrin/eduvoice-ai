@@ -622,9 +622,45 @@ def simple_text_search(query, document_text, chunk_size=1000, overlap=200, top_k
 def generate_chat_response(document_id, user_message):
     """Generate a response to a user question about a document using OpenAI API"""
     try:
-        # Retrieve document
-        document = Document.query.get(document_id)
-        if not document or not document.text_content:
+        # Initialize document text
+        document_text = None
+        
+        # Check if this is a session-only document
+        is_session_doc = str(document_id).startswith('temp_')
+        
+        # Logic to retrieve document text (from DB or session)
+        if is_session_doc:
+            # Look for document in session
+            for doc in session.get('uploads', []):
+                if str(doc.get('id')) == str(document_id):
+                    document_text = doc.get('text_content')
+                    logger.info(f"Using session text for chat with document: {document_id}")
+                    break
+        else:
+            # Try to retrieve from database
+            try:
+                # Convert to int for database query
+                document_id_int = int(document_id)
+                document = Document.query.get(document_id_int)
+                if document and document.text_content:
+                    document_text = document.text_content
+                else:
+                    # Fall back to session if DB document not found
+                    for doc in session.get('uploads', []):
+                        if str(doc.get('id')) == str(document_id):
+                            document_text = doc.get('text_content')
+                            logger.info(f"Using session text as fallback for chat: {document_id}")
+                            break
+            except (ValueError, Exception) as db_error:
+                logger.error(f"Error retrieving document from database: {db_error}")
+                # Try session as fallback
+                for doc in session.get('uploads', []):
+                    if str(doc.get('id')) == str(document_id):
+                        document_text = doc.get('text_content')
+                        break
+        
+        # Check if we have document text
+        if not document_text:
             return None, "Document not found or has no content"
         
         # Check for API key
@@ -639,7 +675,7 @@ def generate_chat_response(document_id, user_message):
         # Perform text similarity search to find relevant chunks
         relevant_chunks = simple_text_search(
             user_message, 
-            document.text_content,
+            document_text,
             chunk_size=1500,
             overlap=300, 
             top_k=3
@@ -703,6 +739,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
+@db_retry(max_retries=3)
 def upload_file():
     """Handle file upload"""
     # Check if a file was uploaded
@@ -723,13 +760,19 @@ def upload_file():
         return redirect(url_for('index'))
     
     try:
-        # Save the file
+        # Create upload folder if it doesn't exist
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Save the file with a unique filename to prevent overwrites
         filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        unique_id = str(uuid.uuid4())[:8]
+        base_name, extension = os.path.splitext(filename)
+        unique_filename = f"{base_name}_{unique_id}{extension}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         file.save(file_path)
         
         # Extract text based on file type
-        filetype = filename.rsplit('.', 1)[1].lower()
+        filetype = extension[1:].lower()  # Remove the dot
         if filetype == 'pdf':
             extracted_text, error = extract_text_from_pdf(file_path)
         elif filetype == 'docx':
@@ -769,8 +812,9 @@ def upload_file():
         
         # Handle summary generation errors
         if summary_error:
-            flash(f"Error generating summary: {summary_error}")
-            return redirect(url_for('index'))
+            logger.warning(f"Summary generation error: {summary_error}")
+            summary = "Summary generation failed. You can still view and chat with the document content."
+            flash("Warning: Could not generate summary due to an error, but the document was processed.")
             
         # Generate interaction tips
         tips, tips_error = generate_interaction_tips(summary, filetype)
@@ -778,17 +822,22 @@ def upload_file():
         # If tips generation failed, log the error but continue (non-critical)
         if tips_error:
             logger.warning(f"Error generating interaction tips: {tips_error}")
-            tips = None
+            tips = '["Ask about key topics", "Request explanations of important concepts"]'
         
         # Initialize document variable
         document = None
+        document_id = None
         
-        # Store in database
+        # Store in database with improved error handling
         try:
+            # Make sure session ID exists
+            if 'session_id' not in session:
+                session['session_id'] = str(uuid.uuid4())
+                
             document = Document(
                 session_id=session['session_id'],
-                filename=filename,
-                filetype=filetype,
+                filename=filename,  # Use original filename for display
+                filetype=filetype.upper(),
                 summary=summary,
                 text_content=extracted_text,
                 interaction_tips=tips,
@@ -796,98 +845,184 @@ def upload_file():
             )
             db.session.add(document)
             db.session.commit()
-            logger.info(f"Document saved to database: {filename}")
-            
-            # Store document ID in session
-            session['last_document_id'] = document.id
-            
-            # Store document metadata in session for history tracking
-            session_document = {
-                'id': document.id,
-                'filename': document.filename,
-                'filetype': document.filetype,
-                'summary': summary[:200] if summary else "",  # Store the first 200 chars
-                'upload_time': document.upload_time.strftime("%Y-%m-%d %H:%M:%S")
-            }
-            
-            # Add to the beginning of the list (most recent first)
-            session['uploads'].insert(0, session_document)
-            
-            # Initialize empty chat history for this document
-            session['chat_history'][str(document.id)] = []
-            
-            # Make sure to persist the session
-            session.modified = True
+            document_id = document.id
+            logger.info(f"Document saved to database: {filename} (ID: {document_id})")
             
         except Exception as db_error:
-            logger.error(f"Database error: {db_error}")
+            logger.error(f"Database error when saving document: {db_error}")
             db.session.rollback()
-            flash("Error saving document to database")
-            return redirect(url_for('index'))
+            
+            # Generate a temporary document ID for session storage
+            document_id = f"temp_{uuid.uuid4()}"
+            
+            flash("Warning: Document saved to session only due to database connection issues. Some features may be limited.", "warning")
+        
+        # Initialize session storage if needed
+        if 'uploads' not in session:
+            session['uploads'] = []
+            
+        if 'chat_history' not in session:
+            session['chat_history'] = {}
+        
+        # Store document ID in session
+        session['last_document_id'] = document_id
+        
+        # Store document metadata and content in session for fallback access
+        upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session_document = {
+            'id': document_id,
+            'filename': filename,
+            'filetype': filetype.upper(),
+            'summary': summary[:200] + "..." if summary and len(summary) > 200 else summary,
+            'upload_time': upload_time,
+            # Store more data for fallback use
+            'full_summary': summary,
+            'text_content': extracted_text,
+            'interaction_tips': tips,
+            'storage_path': file_path
+        }
+        
+        # Add to the beginning of the list (most recent first)
+        session['uploads'].insert(0, session_document)
+        
+        # Initialize empty chat history for this document
+        session['chat_history'][str(document_id)] = []
+        
+        # Make sure to persist the session
+        session.modified = True
         
         # Redirect to document view
-        return redirect(url_for('view_document', document_id=document.id))
+        return redirect(url_for('view_document', document_id=document_id))
         
     except Exception as e:
         logger.exception(f"Error processing file upload: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
         flash(f"Error: {str(e)}")
         return redirect(url_for('index'))
 
-@app.route('/document/<int:document_id>')
+@app.route('/document/<document_id>')
 @db_retry(max_retries=3)
 def view_document(document_id):
     """View uploaded document with summary and chat"""
     try:
-        # Retrieve document with error handling
-        document = Document.query.get_or_404(document_id)
+        # Check if this might be a temporary document ID from session storage
+        if str(document_id).startswith('temp_'):
+            # This is a session-only document, so we need to get it from session
+            document_found = False
+            session_document = None
             
-        # Check if user owns this document (session-based)
-        if document.session_id != session.get('session_id'):
-            flash("You don't have permission to view this document")
-            return redirect(url_for('index'))
-        
-        # Retrieve chat history from database with error handling
-        chat_messages = []
-        try:
-            chat_messages = ChatMessage.query.filter_by(
-                document_id=document_id,
-                session_id=session['session_id']
-            ).order_by(ChatMessage.created_at).all()
-            logger.info(f"Retrieved {len(chat_messages)} chat messages for document {document_id}")
-        except Exception as chat_error:
-            logger.error(f"Error retrieving chat messages: {chat_error}")
-            db.session.rollback()
-            flash("Unable to retrieve chat history. Using cached data if available.", "warning")
-        
-        # Initialize chat history in session if not exists
-        if 'chat_history' not in session:
-            session['chat_history'] = {}
-        
-        # If we don't have chat history for this document in session, initialize it
-        doc_id_str = str(document_id)
-        if doc_id_str not in session['chat_history']:
-            session['chat_history'][doc_id_str] = []
-            session.modified = True
-        
-        # Convert database messages to dict format for template rendering
-        db_messages = []
-        try:
-            db_messages = [msg.to_dict() for msg in chat_messages]
-        except Exception as convert_error:
-            logger.error(f"Error converting chat messages: {convert_error}")
-        
-        # Check if there are flashcards for this document
-        has_flashcards = False
-        if 'flashcards' in session and doc_id_str in session['flashcards']:
-            has_flashcards = True
-        
-        return render_template(
-            'document.html',
-            document=document,
-            chat_messages=db_messages,
-            session_chat_history=session['chat_history'].get(doc_id_str, []),
-            has_flashcards=has_flashcards
-        )
+            # Check if we have session uploads
+            if 'uploads' in session:
+                for doc in session['uploads']:
+                    if str(doc['id']) == document_id:
+                        document_found = True
+                        session_document = doc
+                        break
+            
+            if not document_found:
+                flash("Document not found in session storage")
+                return redirect(url_for('dashboard'))
+            
+            # Create a document-like object from session data for the template
+            class SessionDocument:
+                def __init__(self, doc_dict):
+                    self.id = doc_dict['id']
+                    self.filename = doc_dict['filename']
+                    self.filetype = doc_dict['filetype']
+                    self.summary = doc_dict.get('full_summary', doc_dict.get('summary', 'No summary available'))
+                    self.text_content = doc_dict.get('text_content', '')
+                    self.interaction_tips = doc_dict.get('interaction_tips', '[]')
+                    self.upload_time = doc_dict.get('upload_time', 'Unknown')
+                    self.session_id = session.get('session_id', '')
+            
+            document = SessionDocument(session_document)
+            logger.info(f"Viewing session-only document: {document_id}")
+            
+            # Initialize chat history in session if not exists
+            if 'chat_history' not in session:
+                session['chat_history'] = {}
+            
+            # If we don't have chat history for this document in session, initialize it
+            doc_id_str = str(document_id)
+            if doc_id_str not in session['chat_history']:
+                session['chat_history'][doc_id_str] = []
+                session.modified = True
+            
+            # Check if there are flashcards for this document
+            has_flashcards = False
+            if 'flashcards' in session and doc_id_str in session['flashcards']:
+                has_flashcards = True
+            
+            # For session-only documents, there won't be DB chat messages
+            return render_template(
+                'document.html',
+                document=document,
+                chat_messages=[],
+                session_chat_history=session['chat_history'].get(doc_id_str, []),
+                has_flashcards=has_flashcards,
+                is_session_only=True
+            )
+        else:
+            # Regular DB document - convert to int for database query
+            try:
+                document_id = int(document_id)
+            except ValueError:
+                flash("Invalid document ID")
+                return redirect(url_for('dashboard'))
+                
+            # Retrieve document with error handling
+            document = Document.query.get_or_404(document_id)
+                
+            # Check if user owns this document (session-based)
+            if document.session_id != session.get('session_id'):
+                flash("You don't have permission to view this document")
+                return redirect(url_for('index'))
+            
+            # Retrieve chat history from database with error handling
+            chat_messages = []
+            try:
+                chat_messages = ChatMessage.query.filter_by(
+                    document_id=document_id,
+                    session_id=session['session_id']
+                ).order_by(ChatMessage.created_at).all()
+                logger.info(f"Retrieved {len(chat_messages)} chat messages for document {document_id}")
+            except Exception as chat_error:
+                logger.error(f"Error retrieving chat messages: {chat_error}")
+                db.session.rollback()
+                flash("Unable to retrieve chat history. Using cached data if available.", "warning")
+            
+            # Initialize chat history in session if not exists
+            if 'chat_history' not in session:
+                session['chat_history'] = {}
+            
+            # If we don't have chat history for this document in session, initialize it
+            doc_id_str = str(document_id)
+            if doc_id_str not in session['chat_history']:
+                session['chat_history'][doc_id_str] = []
+                session.modified = True
+            
+            # Convert database messages to dict format for template rendering
+            db_messages = []
+            try:
+                db_messages = [msg.to_dict() for msg in chat_messages]
+            except Exception as convert_error:
+                logger.error(f"Error converting chat messages: {convert_error}")
+            
+            # Check if there are flashcards for this document
+            has_flashcards = False
+            if 'flashcards' in session and doc_id_str in session['flashcards']:
+                has_flashcards = True
+            
+            return render_template(
+                'document.html',
+                document=document,
+                chat_messages=db_messages,
+                session_chat_history=session['chat_history'].get(doc_id_str, []),
+                has_flashcards=has_flashcards
+            )
         
     except Exception as e:
         # Log the error
@@ -896,11 +1031,22 @@ def view_document(document_id):
         # Ensure database session is clean
         db.session.rollback()
         
+        # Check if we can find this document in the session as a fallback
+        if 'uploads' in session:
+            for doc in session['uploads']:
+                if str(doc['id']) == str(document_id):
+                    flash(f"Using cached document data due to database error: {str(e)}", "warning")
+                    logger.info(f"Falling back to session data for document: {document_id}")
+                    
+                    # Redirect to the same route which will now handle it as a session document 
+                    # if it matches the session-only format
+                    return redirect(url_for('view_document', document_id=doc['id']))
+        
         # Show error message and redirect to dashboard
         flash(f"An error occurred while viewing the document: {str(e)}", "error")
         return redirect(url_for('dashboard'))
 
-@app.route('/api/chat/<int:document_id>', methods=['POST'])
+@app.route('/api/chat/<document_id>', methods=['POST'])
 @db_retry(max_retries=3)
 def chat_with_document(document_id):
     """API endpoint for chat functionality"""
@@ -986,21 +1132,80 @@ def chat_with_document(document_id):
                             attachment_text = ocr_note + extracted_text
                             logger.info(f"Successfully extracted text from image attachment: {original_filename}")
         
-        # Retrieve document
-        document = Document.query.get(document_id)
-        if not document:
-            return jsonify({'error': 'Document not found'}), 404
-            
-        # Check if document has content
-        if not document.text_content:
-            return jsonify({
-                'error': 'This document has no extractable text content',
-                'details': 'The file may be an image-based PDF or contain unsupported formatting.'
-            }), 422
+        # Check if this is a session-only document
+        is_session_doc = str(document_id).startswith('temp_')
+        document = None
+        document_text = None
         
-        # Check if user owns this document
-        if document.session_id != session['session_id']:
-            return jsonify({'error': 'Unauthorized access'}), 403
+        if is_session_doc:
+            # This is a session-only document, so get it from session
+            session_document = None
+            for doc in session.get('uploads', []):
+                if str(doc['id']) == str(document_id):
+                    session_document = doc
+                    break
+                    
+            if not session_document:
+                return jsonify({'error': 'Document not found in session'}), 404
+            
+            # For session documents, use the stored text content
+            document_text = session_document.get('text_content')
+            if not document_text:
+                return jsonify({
+                    'error': 'This document has no extractable text content',
+                    'details': 'The file may be an image-based PDF or contain unsupported formatting.'
+                }), 422
+            
+            # Create a mock document object with the document_id attribute for later use
+            class SessionDocument:
+                def __init__(self, doc_id, text):
+                    self.id = doc_id
+                    self.text_content = text
+                    self.session_id = session.get('session_id', '')
+                
+                def to_dict(self):
+                    return {
+                        'id': self.id,
+                        'text_content': self.text_content,
+                        'session_id': self.session_id
+                    }
+            
+            document = SessionDocument(document_id, document_text)
+            logger.info(f"Using session document for chat: {document_id}")
+        else:
+            # Try to convert to integer for database lookup
+            try:
+                document_id_int = int(document_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid document ID'}), 400
+            
+            # Retrieve from database
+            document = Document.query.get(document_id_int)
+            if not document:
+                # Check if we have it in session as a fallback
+                for doc in session.get('uploads', []):
+                    if str(doc['id']) == str(document_id):
+                        document_text = doc.get('text_content')
+                        if document_text:
+                            document = SessionDocument(document_id, document_text)
+                            logger.info(f"Using session document as fallback for chat: {document_id}")
+                            is_session_doc = True
+                            break
+                
+                if not document:
+                    return jsonify({'error': 'Document not found'}), 404
+            
+            if not is_session_doc:
+                # Check if document has content
+                if not document.text_content:
+                    return jsonify({
+                        'error': 'This document has no extractable text content',
+                        'details': 'The file may be an image-based PDF or contain unsupported formatting.'
+                    }), 422
+                
+                # Check if user owns this document
+                if document.session_id != session['session_id']:
+                    return jsonify({'error': 'Unauthorized access'}), 403
         
         # Check for OpenAI API key
         if not os.environ.get("OPENAI_API_KEY"):
