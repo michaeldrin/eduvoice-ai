@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="100px" height="100px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Wizard hat -->
+    <path d="M30,40 L50,10 L70,40 Z" fill="#6b4ce6" />
+    <path d="M25,40 L75,40" />
+    <circle cx="50" cy="25" r="2" fill="#ffcc00" />
+    <circle cx="60" cy="30" r="2" fill="#ffcc00" />
+    <circle cx="40" cy="30" r="2" fill="#ffcc00" />
+    <!-- Face -->
+    <circle cx="50" cy="55" r="15" fill="#ffe6cc" />
+    <!-- Eyes -->
+    <circle cx="43" cy="50" r="2" fill="#333" />
+    <circle cx="57" cy="50" r="2" fill="#333" />
+    <!-- Beard -->
+    <path d="M40,60 Q50,70 60,60 L60,75 L40,75 Z" fill="#cccccc" />
+    <!-- Smile -->
+    <path d="M45,55 Q50,60 55,55" />
+    <!-- Magic wand -->
+    <line x1="65" y1="65" x2="80" y2="50" stroke="#996633" />
+    <circle cx="82" cy="48" r="3" fill="#ffff00" />
+  </g>
+</svg>

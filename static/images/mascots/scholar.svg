@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="100px" height="100px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Book -->
+    <path d="M25,70 L75,70 C77,70 79,68 79,66 L79,30 C79,28 77,26 75,26 L25,26 C23,26 21,28 21,30 L21,66 C21,68 23,70 25,70 Z" fill="#e6f7ff"/>
+    <!-- Book pages -->
+    <path d="M50,26 L50,70" stroke="#99d6ff" />
+    <!-- Graduation cap -->
+    <path d="M30,20 L70,20 L50,10 Z" fill="#4db8ff" />
+    <path d="M45,20 L45,15 M55,20 L55,15" />
+    <!-- Glasses -->
+    <circle cx="40" cy="45" r="5" fill="#fff" />
+    <circle cx="60" cy="45" r="5" fill="#fff" />
+    <path d="M45,45 L55,45" />
+    <!-- Smile -->
+    <path d="M40,60 Q50,65 60,60" />
+  </g>
+</svg>
