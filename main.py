@@ -401,6 +401,107 @@ def generate_summary(text):
         return None, f"Error generating summary: {str(e)}"
 
 # Generate personalized interaction tips
+def generate_flashcards(document_text, document_id):
+    """
+    Generate educational flashcards based on document content
+    
+    Args:
+        document_text: The full text content of the document
+        document_id: The document ID for storing in session
+        
+    Returns:
+        List of flashcards in JSON format, or None and error message if generation fails
+    """
+    try:
+        # Check for API key
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+        
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+        
+        # Create prompt for flashcard generation
+        prompt = f"""Generate 5-10 educational flashcards based on the following document content.
+        Each flashcard should have a question on one side and the answer on the other.
+        Focus on key concepts, definitions, and important facts from the document.
+        Make the flashcards educational and helpful for someone studying this material.
+        
+        Return the flashcards in the following JSON format:
+        [
+          {{"question": "Question 1?", "answer": "Answer 1"}},
+          {{"question": "Question 2?", "answer": "Answer 2"}},
+          ...
+        ]
+        
+        DOCUMENT CONTENT:
+        {document_text[:4000]}  # Limiting input to first 4000 chars to avoid token limits
+        """
+        
+        # Generate flashcards
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            max_tokens=2000,
+            temperature=0.7
+        )
+        
+        result = response.choices[0].message.content.strip()
+        
+        # Parse the JSON response
+        try:
+            flashcards_data = json.loads(result)
+            
+            # Make sure we have the expected structure
+            if 'flashcards' in flashcards_data:
+                flashcards = flashcards_data['flashcards']
+            else:
+                # Try to find an array directly in the response
+                for key, value in flashcards_data.items():
+                    if isinstance(value, list) and len(value) > 0:
+                        flashcards = value
+                        break
+                else:
+                    # If no array found within objects, check if the response itself is an array
+                    if isinstance(flashcards_data, list):
+                        flashcards = flashcards_data
+                    else:
+                        flashcards = []
+            
+            # Validate each flashcard has question and answer
+            valid_flashcards = []
+            for card in flashcards:
+                if isinstance(card, dict) and 'question' in card and 'answer' in card:
+                    valid_flashcards.append({
+                        'question': card['question'],
+                        'answer': card['answer']
+                    })
+            
+            if not valid_flashcards:
+                return None, "Failed to generate valid flashcards from the document content."
+                
+            # Initialize flashcards session storage if needed
+            if 'flashcards' not in session:
+                session['flashcards'] = {}
+                
+            # Store flashcards in session keyed by document ID
+            session['flashcards'][str(document_id)] = valid_flashcards
+            session.modified = True
+                
+            return valid_flashcards, None
+            
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse flashcards JSON: {result}")
+            return None, "Failed to generate valid flashcards. The AI returned malformed data."
+            
+    except Exception as e:
+        logger.exception(f"Error generating flashcards: {e}")
+        return None, f"Error generating flashcards: {str(e)}"
+
 def generate_interaction_tips(document_summary, filetype):
     """
     Generate personalized document interaction tips based on the document summary
@@ -451,91 +552,6 @@ def generate_interaction_tips(document_summary, filetype):
         return None, f"Error generating tips: {str(e)}"
 
 # Simple text similarity search function
-def generate_flashcards(document_text, document_id):
-    """
-    Generate educational flashcards based on document content
-    
-    Args:
-        document_text: The full text content of the document
-        document_id: The document ID for storing in session
-        
-    Returns:
-        List of flashcards in JSON format, or None and error message if generation fails
-    """
-    try:
-        # Only generate flashcards if there's valid text content
-        if not document_text or len(document_text.strip()) < 100:
-            return None, "Document text is too short to generate meaningful flashcards"
-            
-        # Check for API key
-        if not os.environ.get("OPENAI_API_KEY"):
-            logger.warning("OpenAI API key not set, skipping flashcard generation")
-            return None, "OpenAI API key not configured"
-            
-        logger.info("Generating flashcards from document text")
-        
-        # System prompt to direct the assistant
-        system_prompt = """
-        Generate 5 to 10 educational flashcards based only on this document. 
-        Each card should have a question and answer that help reinforce key concepts from the document.
-        
-        Format your response as a JSON array of objects with 'question' and 'answer' fields.
-        For example:
-        [
-            {
-                "question": "What is the main theme of the document?",
-                "answer": "The main theme is..."
-            },
-            {
-                "question": "What are the three key points discussed?",
-                "answer": "The three key points are..."
-            }
-        ]
-        
-        Ensure questions are concise but specific, and answers are comprehensive but not excessively long.
-        Focus on the most important information in the document.
-        """
-        
-        # Limit text length to avoid token issues
-        max_text_length = 5000
-        truncated_text = document_text[:max_text_length]
-        if len(document_text) > max_text_length:
-            truncated_text += "... [text truncated due to length]"
-        
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        completion = client.chat.completions.create(
-            model="gpt-4o", # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": truncated_text}
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=1000,
-            temperature=0.7
-        )
-        
-        # Extract the generated flashcards
-        flashcards_json = completion.choices[0].message.content.strip()
-        flashcards = json.loads(flashcards_json)
-        
-        # Store in session
-        if 'flashcards' not in session:
-            session['flashcards'] = {}
-        
-        # Store flashcards for this document
-        session['flashcards'][str(document_id)] = flashcards
-        session.modified = True
-        
-        logger.info(f"Successfully generated {len(flashcards)} flashcards")
-        
-        return flashcards, None
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing flashcards JSON: {e}")
-        return None, f"Error formatting flashcards: {e}"
-    except Exception as e:
-        logger.error(f"Error generating flashcards: {e}")
-        return None, str(e)
 
 def simple_text_search(query, document_text, chunk_size=1000, overlap=200, top_k=3):
     """
@@ -1153,6 +1169,7 @@ def serve_attachment(filename):
 
 # API endpoint to generate flashcards
 @app.route('/api/generate-flashcards/<int:document_id>', methods=['POST'])
+@db_retry(max_retries=3)
 def api_generate_flashcards(document_id):
     """Generate flashcards for a document"""
     try:
@@ -1194,7 +1211,13 @@ def api_generate_flashcards(document_id):
         })
         
     except Exception as e:
+        # Log the error
         logger.exception(f"Error generating flashcards: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Return error response
         return jsonify({
             'error': 'An unexpected error occurred',
             'details': str(e)
@@ -1202,28 +1225,41 @@ def api_generate_flashcards(document_id):
 
 # Route to view flashcards for a document
 @app.route('/flashcards/<int:document_id>')
+@db_retry(max_retries=3)
 def view_flashcards(document_id):
     """View flashcards for a document"""
-    # Retrieve document
-    document = Document.query.get_or_404(document_id)
-    
-    # Check if user owns this document
-    if document.session_id != session.get('session_id'):
-        flash("You don't have permission to view this document")
-        return redirect(url_for('index'))
-    
-    # Check if flashcards exist in session
-    doc_id_str = str(document_id)
-    flashcards = []
-    
-    if 'flashcards' in session and doc_id_str in session['flashcards']:
-        flashcards = session['flashcards'][doc_id_str]
+    try:
+        # Retrieve document
+        document = Document.query.get_or_404(document_id)
         
-    return render_template(
-        'flashcards.html',
-        document=document,
-        flashcards=flashcards
-    )
+        # Check if user owns this document
+        if document.session_id != session.get('session_id'):
+            flash("You don't have permission to view this document")
+            return redirect(url_for('index'))
+        
+        # Check if flashcards exist in session
+        doc_id_str = str(document_id)
+        flashcards = []
+        
+        if 'flashcards' in session and doc_id_str in session['flashcards']:
+            flashcards = session['flashcards'][doc_id_str]
+            
+        return render_template(
+            'flashcards.html',
+            document=document,
+            flashcards=flashcards
+        )
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error viewing flashcards: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Show error message
+        flash(f"An error occurred while retrieving flashcards: {str(e)}")
+        return redirect(url_for('dashboard'))
+    
 
 # Route to clear session history
 @app.route('/clear-history')
