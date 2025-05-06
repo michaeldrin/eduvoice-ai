@@ -51,7 +51,26 @@
                                 <div class="message-header small mb-1">
                                     <strong>{% if message.message_type == 'user' %}You{% else %}AI Assistant{% endif %}</strong>
                                 </div>
-                                <div class="message-content">{{ message.content|nl2br }}</div>
+                                <div class="message-content">
+                                    {{ message.content|nl2br }}
+                                    {% if message.has_attachment %}
+                                    <div class="attachment-indicator mt-2">
+                                        <div class="d-flex align-items-center p-2 bg-body-tertiary rounded">
+                                            <i class="bi 
+                                            {% if message.attachment_type == 'image' %}bi-file-image
+                                            {% elif message.attachment_type == 'pdf' %}bi-file-pdf
+                                            {% elif message.attachment_type == 'docx' %}bi-file-word
+                                            {% elif message.attachment_type == 'txt' %}bi-file-text
+                                            {% else %}bi-file-earmark{% endif %} me-2"></i>
+                                            <span class="small">
+                                                {{ message.attachment_original_filename }}
+                                                <a href="{{ url_for('serve_attachment', filename=message.attachment_filename) }}" 
+                                                   class="ms-2" target="_blank">View</a>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                         {% endfor %}
                     {% else %}
@@ -188,6 +207,43 @@
         // Focus the input field
         userMessageInput.focus();
         
+        // Handle file upload
+        fileUploadInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Store the selected file
+                currentAttachment = file;
+                
+                // Update UI to show the attachment
+                attachmentName.textContent = file.name;
+                attachmentPreview.classList.remove('d-none');
+                
+                // Set appropriate icon based on file type
+                const fileIcon = attachmentPreview.querySelector('i.bi');
+                if (file.type.includes('image')) {
+                    fileIcon.className = 'bi bi-image me-1';
+                } else if (file.name.endsWith('.pdf')) {
+                    fileIcon.className = 'bi bi-file-pdf me-1';
+                } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                    fileIcon.className = 'bi bi-file-word me-1';
+                } else if (file.name.endsWith('.txt')) {
+                    fileIcon.className = 'bi bi-file-text me-1';
+                } else {
+                    fileIcon.className = 'bi bi-file-earmark me-1';
+                }
+            }
+        });
+        
+        // Handle remove attachment button
+        removeAttachmentBtn.addEventListener('click', function() {
+            // Clear the file input
+            fileUploadInput.value = '';
+            
+            // Reset attachment state
+            currentAttachment = null;
+            attachmentPreview.classList.add('d-none');
+        });
+        
         // Handle chat form submission
         chatForm.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -254,7 +310,8 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ message: userMessage })
-                    });
+                        });
+                    }
                     
                     // Hide loading indicator
                     loadingMessage.classList.add('d-none');
@@ -424,110 +481,6 @@
                 }
             });
         }
-        
-        // Handle file upload
-        fileUploadInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                // Store the selected file
-                currentAttachment = file;
-                
-                // Update UI to show the attachment
-                attachmentName.textContent = file.name;
-                attachmentPreview.classList.remove('d-none');
-                
-                // Set appropriate icon based on file type
-                const fileIcon = attachmentPreview.querySelector('i.bi');
-                if (file.type.includes('image')) {
-                    fileIcon.className = 'bi bi-image me-1';
-                } else if (file.name.endsWith('.pdf')) {
-                    fileIcon.className = 'bi bi-file-pdf me-1';
-                } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-                    fileIcon.className = 'bi bi-file-word me-1';
-                } else if (file.name.endsWith('.txt')) {
-                    fileIcon.className = 'bi bi-file-text me-1';
-                } else {
-                    fileIcon.className = 'bi bi-file-earmark me-1';
-                }
-            }
-        });
-        
-        // Handle remove attachment button
-        removeAttachmentBtn.addEventListener('click', function() {
-            // Clear the file input
-            fileUploadInput.value = '';
-            
-            // Reset attachment state
-            currentAttachment = null;
-            attachmentPreview.classList.add('d-none');
-        });
-        
-        // File upload handlers already implemented above
-                    
-                    // Hide loading indicator
-                    loadingMessage.classList.add('d-none');
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        
-                        // Check for warning in the response
-                        if (data.warning) {
-                            console.warn('API warning:', data.warning);
-                        }
-                        
-                        // Add AI response to chat
-                        addMessageToChat('assistant', data.ai_response.content);
-                        success = true;
-                    } else {
-                        // Try to parse error response
-                        let errorMessage = 'Failed to get response';
-                        try {
-                            const errorData = await response.json();
-                            errorMessage = errorData.error || errorMessage;
-                            if (errorData.details) {
-                                errorMessage += `: ${errorData.details}`;
-                            }
-                        } catch (parseError) {
-                            errorMessage = `Error (${response.status}): Failed to get response`;
-                        }
-                        
-                        // If it's a server error (5xx), we can retry
-                        if (response.status >= 500 && retryCount < MAX_RETRIES) {
-                            console.log(`Retry attempt ${retryCount + 1} for server error`);
-                            retryCount++;
-                            await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
-                            continue;
-                        }
-                        
-                        // Add error message for client errors or after max retries
-                        addMessageToChat('assistant', `Error: ${errorMessage}`);
-                        success = true; // We're done trying
-                    }
-                } catch (error) {
-                    // Network error - we can retry
-                    if (retryCount < MAX_RETRIES) {
-                        console.log(`Retry attempt ${retryCount + 1} for network error: ${error.message}`);
-                        retryCount++;
-                        await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
-                    } else {
-                        // Hide loading indicator
-                        loadingMessage.classList.add('d-none');
-                        
-                        // Add error message after max retries
-                        addMessageToChat('assistant', 'Error: Could not connect to server. Please check your internet connection.');
-                        console.error('Error:', error);
-                        success = true; // We're done trying
-                    }
-                }
-            }
-            
-            // Reset UI state
-            userMessageInput.disabled = false;
-            submitBtn.innerHTML = originalBtnContent;
-            submitBtn.disabled = false;
-            userMessageInput.focus();
-            isProcessing = false;
-        });
     });
 </script>
 {% endblock %}
