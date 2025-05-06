@@ -171,7 +171,9 @@
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
-            contentDiv.innerText = content;
+            
+            // Convert text content to HTML with line breaks preserved
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
             
             messageDiv.appendChild(headerDiv);
             messageDiv.appendChild(contentDiv);

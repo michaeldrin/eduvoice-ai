@@ -2,22 +2,89 @@
 body {
     min-height: 100vh;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     position: relative;
 }
 
 .card {
     border-radius: 10px;
-    transition: transform 0.3s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.card:hover {
-    transform: translateY(-5px);
+/* Only enable hover effects on larger screens */
+@media (min-width: 992px) {
+    .card {
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    }
 }
 
 /* Ensure proper contrast in the dark theme */
 .text-muted {
     color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Chat styles */
+.chat-container {
+    height: 350px; 
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-message {
+    padding: 10px 15px;
+    border-radius: 10px;
+    max-width: 85%;
+    word-break: break-word;
+    margin-bottom: 10px;
+}
+
+.user-message {
+    background-color: var(--bs-primary);
+    color: white;
+    align-self: flex-end;
+    margin-left: auto;
+    border-bottom-right-radius: 0;
+}
+
+.assistant-message {
+    background-color: var(--bs-secondary);
+    color: white;
+    align-self: flex-start;
+    margin-right: auto;
+    border-bottom-left-radius: 0;
+}
+
+.message-header {
+    opacity: 0.9;
+}
+
+.message-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+/* Additional styles for print view */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .print-only {
+        display: block !important;
+    }
+    
+    .summary-content {
+        font-size: 12pt;
+        line-height: 1.5;
+    }
 }
 
 /* Floating Action Button */
