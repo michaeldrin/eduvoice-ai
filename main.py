@@ -502,6 +502,135 @@ def generate_flashcards(document_text, document_id):
         logger.exception(f"Error generating flashcards: {e}")
         return None, f"Error generating flashcards: {str(e)}"
 
+def generate_quiz(document_text, document_id):
+    """
+    Generate a multiple-choice quiz based on document content
+    
+    Args:
+        document_text: The full text content of the document
+        document_id: The document ID for storing in session
+        
+    Returns:
+        List of quiz questions in JSON format, or None and error message if generation fails
+    """
+    try:
+        # Check for API key
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+        
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+        
+        # Create system prompt
+        system_prompt = """Generate 5 multiple choice questions based on the document provided.
+        Each question should have:
+        - The question text
+        - 4 answer options (A, B, C, D)
+        - Indicate which option is correct
+        
+        Format your response as a JSON array of objects with these keys:
+        - question: the text of the question
+        - options: an object with keys A, B, C, D containing the text of each option
+        - correct_answer: the letter of the correct option (A, B, C, or D)
+        
+        Example format:
+        [
+            {
+                "question": "What is the capital of France?",
+                "options": {
+                    "A": "London",
+                    "B": "Berlin",
+                    "C": "Paris",
+                    "D": "Madrid"
+                },
+                "correct_answer": "C"
+            }
+        ]
+        """
+        
+        # Create user prompt with truncated document text
+        user_prompt = f"""Generate a multiple-choice quiz based on this document:
+
+        {document_text[:4000]}  # Limiting input to first 4000 chars to avoid token limits
+        """
+        
+        # Generate quiz
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=2000,
+            temperature=0.7
+        )
+        
+        result = response.choices[0].message.content.strip()
+        
+        # Parse the JSON response
+        try:
+            quiz_data = json.loads(result)
+            
+            # Make sure we have the expected structure
+            quiz_questions = []
+            if isinstance(quiz_data, list):
+                quiz_questions = quiz_data
+            elif any(key in quiz_data for key in ['quiz', 'questions']):
+                for key in ['quiz', 'questions']:
+                    if key in quiz_data and isinstance(quiz_data[key], list):
+                        quiz_questions = quiz_data[key]
+                        break
+            else:
+                # Try to find an array directly in the response
+                for key, value in quiz_data.items():
+                    if isinstance(value, list) and len(value) > 0:
+                        quiz_questions = value
+                        break
+            
+            # Validate each quiz question
+            valid_questions = []
+            for question in quiz_questions:
+                if (isinstance(question, dict) and 
+                    'question' in question and 
+                    'options' in question and
+                    'correct_answer' in question and
+                    isinstance(question['options'], dict) and
+                    all(option in question['options'] for option in ['A', 'B', 'C', 'D']) and
+                    question['correct_answer'] in ['A', 'B', 'C', 'D']):
+                    
+                    valid_questions.append({
+                        'question': question['question'],
+                        'options': question['options'],
+                        'correct_answer': question['correct_answer']
+                    })
+            
+            if not valid_questions:
+                return None, "Failed to generate valid quiz questions from the document content."
+                
+            # Initialize quizzes session storage if needed
+            if 'quizzes' not in session:
+                session['quizzes'] = {}
+                
+            # Store quiz in session keyed by document ID
+            session['quizzes'][str(document_id)] = valid_questions
+            session.modified = True
+            
+            logger.info(f"Successfully generated quiz with {len(valid_questions)} questions for document {document_id}")
+            return valid_questions, None
+            
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse quiz JSON: {result}")
+            return None, "Failed to generate valid quiz questions. The AI returned malformed data."
+            
+    except Exception as e:
+        logger.exception(f"Error generating quiz: {e}")
+        return None, f"Error generating quiz: {str(e)}"
+
 def generate_interaction_tips(document_summary, filetype):
     """
     Generate personalized document interaction tips based on the document summary
