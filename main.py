@@ -112,26 +112,80 @@ def is_image_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in IMAGE_EXTENSIONS
 
 # Helper function to extract text from image files using OCR
-def extract_text_from_image(file_path):
-    """Extract text from image file using pytesseract OCR"""
+def extract_text_from_image(file_path, language='eng'):
+    """
+    Extract text from image file using pytesseract OCR
+    
+    Args:
+        file_path: Path to the image file
+        language: OCR language. Defaults to 'eng' (English).
+                  Can be 'eng' (English), 'deu' (German), 'fas' (Persian),
+                  'fra' (French), 'spa' (Spanish), etc. or combined with '+' 
+                  like 'eng+deu' for multiple languages.
+    
+    Returns:
+        Tuple of (extracted_text, error_message)
+    """
     try:
         # Check if file exists
         if not os.path.exists(file_path):
             logger.error(f"Image file not found: {file_path}")
             return None, "Image file not found. Please upload the file again."
         
+        # Check if pytesseract is properly installed
+        if isinstance(pytesseract, PytesseractPlaceholder):
+            logger.error("pytesseract module is not installed")
+            return None, "Image OCR is currently unavailable. The server is missing required libraries."
+        
         # Open the image with PIL
         image = Image.open(file_path)
         
-        # Run OCR on the image
-        text = pytesseract.image_to_string(image)
+        # Try to detect script/language if not specified
+        # First try with default English
+        text = pytesseract.image_to_string(image, lang='eng')
         
-        # Check if we got any text
+        # If English doesn't give good results, try other common languages
+        if not text or len(text.strip()) < 10:  # Very little text was found
+            logger.info(f"Trying multi-language OCR for image: {file_path}")
+            
+            # Try common languages one by one
+            for lang_code in ['eng+deu+fra+spa', 'ara+fas+urd', 'rus+ukr+bel', 'chi_sim+chi_tra+jpn+kor']:
+                try:
+                    lang_text = pytesseract.image_to_string(image, lang=lang_code)
+                    if lang_text and len(lang_text.strip()) > len(text.strip()):
+                        text = lang_text
+                        logger.info(f"Better OCR results with language(s): {lang_code}")
+                except Exception as lang_err:
+                    logger.warning(f"Error trying language {lang_code}: {lang_err}")
+                    continue
+        
+        # Preprocess the image if text extraction was poor
+        if not text or len(text.strip()) < 10:
+            logger.info(f"Trying image preprocessing for better OCR: {file_path}")
+            try:
+                # Convert to grayscale
+                gray_image = image.convert('L')
+                
+                # Apply thresholding to improve contrast
+                threshold_image = gray_image.point(lambda x: 0 if x < 128 else 255, '1')
+                
+                # Try OCR again on the processed image
+                processed_text = pytesseract.image_to_string(threshold_image)
+                
+                if processed_text and len(processed_text.strip()) > len(text.strip()):
+                    text = processed_text
+                    logger.info("Image preprocessing improved OCR results")
+            except Exception as process_err:
+                logger.warning(f"Error during image preprocessing: {process_err}")
+        
+        # Check final result
         if not text or len(text.strip()) == 0:
             logger.warning(f"No text extracted from image: {file_path}")
             return None, "No readable text found in the image file. The image may not contain clear text."
             
-        return text, None
+        # Add info about multi-language support
+        info_text = "This text was extracted using OCR (Optical Character Recognition) technology with multi-language support.\n\n"
+        return info_text + text.strip(), None
         
     except Exception as e:
         logger.exception(f"Error extracting text from image: {e}")
@@ -490,7 +544,7 @@ def upload_file():
         
     # Check file type
     if not allowed_file(file.filename):
-        flash('Invalid file type. Please upload a PDF or DOCX file')
+        flash('Invalid file type. Please upload a PDF, DOCX, TXT, JPG, JPEG, or PNG file')
         return redirect(url_for('index'))
     
     try:

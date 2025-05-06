@@ -14,13 +14,13 @@
                     <div class="mb-4 text-center">
                         <img src="{{ url_for('static', filename='images/upload.svg') }}" 
                              alt="Upload" style="width: 150px; margin-bottom: 20px;">
-                        <p class="lead">Upload a PDF or DOCX file to analyze and summarize it.</p>
+                        <p class="lead">Upload a PDF, DOCX, TXT, or an image (JPG, PNG) file to analyze and summarize it.</p>
                     </div>
                     
                     <div class="mb-3">
                         <label for="file" class="form-label">Select Document</label>
-                        <input type="file" class="form-control" id="file" name="file" accept=".pdf,.docx" required>
-                        <div class="form-text">Supported formats: PDF, DOCX (Max size: 16MB)</div>
+                        <input type="file" class="form-control" id="file" name="file" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png" required>
+                        <div class="form-text">Supported formats: PDF, DOCX, TXT, JPG, PNG (Max size: 16MB)</div>
                     </div>
                     
                     <div class="d-grid gap-2">
