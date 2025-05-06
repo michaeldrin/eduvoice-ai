@@ -2031,6 +2031,115 @@ def not_found(error):
 def server_error(error):
     return render_template('error.html', error="Internal server error"), 500
 
+# Translation API endpoint
+@app.route('/api/translate/<int:document_id>', methods=['POST'])
+@db_retry()
+def translate_document_api(document_id):
+    """Translate document content to the specified language"""
+    try:
+        # Get target language from request
+        data = request.get_json()
+        if not data or 'language' not in data:
+            return jsonify({'error': 'Target language is required'}), 400
+            
+        target_language = data['language']
+        
+        # Validate target language
+        if target_language not in TRANSLATION_LANGUAGES:
+            return jsonify({'error': f'Unsupported target language: {target_language}'}), 400
+            
+        # Get document from database
+        document = Document.query.get(document_id)
+        if not document:
+            return jsonify({'error': 'Document not found'}), 404
+            
+        # Check if document has text content
+        if not document.text_content:
+            return jsonify({'error': 'Document has no extractable text content'}), 400
+            
+        # Check if document is already translated to requested language
+        if document.has_translation and document.translation_language == target_language:
+            return jsonify({
+                'message': 'Document already translated to this language',
+                'translated_text': document.translated_text,
+                'language_guide': document.language_guide,
+                'language_info': TRANSLATION_LANGUAGES[target_language]
+            }), 200
+            
+        # Translate the document
+        logger.info(f"Translating document {document_id} to {target_language}")
+        translated_text, language_guide, error = translate_document(document.text_content, target_language)
+        
+        if error:
+            logger.error(f"Error translating document: {error}")
+            return jsonify({'error': error}), 500
+            
+        # Save the translation to the database
+        document.has_translation = True
+        document.translated_text = translated_text
+        document.translation_language = target_language
+        document.language_guide = language_guide
+        db.session.commit()
+        
+        # Return success response
+        return jsonify({
+            'message': 'Document successfully translated',
+            'translated_text': translated_text,
+            'language_guide': language_guide,
+            'language_info': TRANSLATION_LANGUAGES[target_language]
+        }), 200
+        
+    except Exception as e:
+        logger.exception(f"Error in translation API: {e}")
+        db.session.rollback()
+        return jsonify({'error': f'Translation failed: {str(e)}'}), 500
+
+# Route to view translated document
+@app.route('/document/<int:document_id>/translate/<language>')
+@db_retry()
+def view_translated_document(document_id, language):
+    """View document with translation in the specified language"""
+    try:
+        # Get document from database
+        document = Document.query.get(document_id)
+        if not document:
+            flash("Document not found", "error")
+            return redirect(url_for('dashboard'))
+            
+        # Check if this document has the requested translation
+        has_requested_translation = document.has_translation and document.translation_language == language
+        
+        # If the document doesn't have a translation yet, or has a different language translation,
+        # we'll redirect to the regular document view and let the client-side handle the translation request
+        if not has_requested_translation:
+            flash(f"Translation to {TRANSLATION_LANGUAGES.get(language, {}).get('name', language)} will be generated", "info")
+            return redirect(url_for('view_document', document_id=document_id))
+            
+        # Get chat messages for this document
+        chat_messages = ChatMessage.query.filter_by(document_id=document_id).order_by(ChatMessage.created_at).all()
+        
+        # Get session chat history as fallback (likely empty if we have database messages)
+        session_chat_history = []
+        if 'chat_history' in session and str(document_id) in session['chat_history']:
+            session_chat_history = session['chat_history'][str(document_id)]
+        
+        # Render the document template with translation view
+        return render_template(
+            'document.html', 
+            document=document,
+            chat_messages=chat_messages,
+            session_chat_history=session_chat_history,
+            translation_languages=TRANSLATION_LANGUAGES,
+            view_translation=True,
+            language_code=language,
+            language_info=TRANSLATION_LANGUAGES.get(language, {})
+        )
+        
+    except Exception as e:
+        logger.exception(f"Error viewing translated document: {e}")
+        flash(f"Error loading translated document: {str(e)}", "error")
+        return redirect(url_for('dashboard'))
+
 # Run the application
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

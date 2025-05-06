@@ -71,6 +71,49 @@
         font-size: 0.9rem;
         color: var(--bs-secondary-color);
     }
+    
+    /* Styling for translation elements */
+    .translation-dropdown .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .translation-dropdown .flag {
+        display: inline-block;
+        font-size: 1.2rem;
+        margin-right: 3px;
+    }
+    
+    .translation-dropdown .native-name {
+        font-size: 0.85rem;
+        color: var(--bs-secondary-color);
+        margin-left: 5px;
+    }
+    
+    .language-guide {
+        background-color: var(--bs-light-bg-subtle);
+        border-left: 4px solid var(--bs-info);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        border-radius: 0.375rem;
+    }
+    
+    .language-guide h4 {
+        color: var(--bs-info);
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .language-guide ul {
+        padding-left: 1.25rem;
+    }
+    
+    .translation-toggle-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -280,15 +323,63 @@
                     <button id="generate-flashcards" class="btn btn-sm btn-info me-2">
                         <i class="bi bi-card-heading"></i> Generate Flashcards
                     </button>
-                    <button id="generate-quiz" class="btn btn-sm btn-success">
+                    <button id="generate-quiz" class="btn btn-sm btn-success me-2">
                         <i class="bi bi-question-circle"></i> Generate Quiz
                     </button>
+                    
+                    <!-- Translation Dropdown -->
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-sm btn-secondary dropdown-toggle translation-toggle-btn" 
+                                type="button" 
+                                id="translationDropdown" 
+                                data-bs-toggle="dropdown" 
+                                aria-expanded="false">
+                            <i class="bi bi-translate"></i> Translate
+                        </button>
+                        <ul class="dropdown-menu translation-dropdown" aria-labelledby="translationDropdown">
+                            {% for lang_code, lang_info in translation_languages.items() %}
+                            <li>
+                                <button class="dropdown-item translate-btn" data-lang="{{ lang_code }}">
+                                    <span class="flag">{{ lang_info.flag }}</span>
+                                    {{ lang_info.name }}
+                                    <span class="native-name">({{ lang_info.native }})</span>
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                 </div>
             </div>
             <div class="card-body">
+                {% if view_translation and document.has_translation and document.translation_language == language_code %}
+                <!-- Translation Language Guide -->
+                <div class="language-guide mb-4">
+                    <h4>{{ language_info.flag }} {{ language_info.name }} Language Guide</h4>
+                    {{ document.language_guide|nl2br }}
+                </div>
+                
+                <!-- Translated Content -->
+                <div id="translated-content" class="summary-container">
+                    {{ document.translated_text|nl2br }}
+                </div>
+                
+                <!-- Original Summary Toggle -->
+                <div class="d-flex justify-content-end mt-3 mb-3">
+                    <button id="toggle-translation" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-translate"></i> View Original
+                    </button>
+                </div>
+                
+                <!-- Hidden Original Content -->
+                <div id="original-content" class="summary-container d-none">
+                    {{ document.summary|nl2br }}
+                </div>
+                {% else %}
+                <!-- Original Content -->
                 <div id="summary-content" class="summary-container">
                     {{ document.summary|nl2br }}
                 </div>
+                {% endif %}
                 
                 <!-- Ad below Summary -->
                 <div class="ad-container summary-ad no-print">
