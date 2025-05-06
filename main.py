@@ -81,8 +81,29 @@ def inject_global_variables():
 # Configure upload folder and allowed extensions
 UPLOAD_FOLDER = 'uploads'
 ATTACHMENT_FOLDER = os.path.join(UPLOAD_FOLDER, 'attachments')
-ALLOWED_EXTENSIONS = {'pdf', 'docx', 'txt', 'jpg', 'jpeg', 'png'}
+# Define file extension groups
+PDF_EXTENSIONS = {'pdf'}
+DOCX_EXTENSIONS = {'docx'}
+TEXT_EXTENSIONS = {'txt'}
 IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+ALLOWED_EXTENSIONS = PDF_EXTENSIONS.union(DOCX_EXTENSIONS).union(TEXT_EXTENSIONS).union(IMAGE_EXTENSIONS)
+
+# Define supported OCR languages
+OCR_LANGUAGES = {
+    'eng': 'English',
+    'deu': 'German',
+    'fra': 'French',
+    'spa': 'Spanish',
+    'ara': 'Arabic',
+    'fas': 'Persian',
+    'urd': 'Urdu',
+    'rus': 'Russian',
+    'ukr': 'Ukrainian',
+    'chi_sim': 'Chinese (Simplified)',
+    'chi_tra': 'Chinese (Traditional)',
+    'jpn': 'Japanese',
+    'kor': 'Korean'
+}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['ATTACHMENT_FOLDER'] = ATTACHMENT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
@@ -562,10 +583,23 @@ def upload_file():
         elif filetype == 'txt':
             extracted_text, error = extract_text_from_txt(file_path)
         elif filetype in ['jpg', 'jpeg', 'png']:
+            # Inform user about OCR processing through the logger
+            logger.info(f"Processing image with OCR: {filename}")
+            
+            # Extract text using OCR
             extracted_text, error = extract_text_from_image(file_path)
+            
             # Add OCR indicator to inform the user
             if extracted_text and not error:
-                extracted_text = f"[OCR EXTRACTED TEXT FROM IMAGE]\n\n{extracted_text}"
+                ocr_info = (
+                    "[TEXT EXTRACTED USING OCR TECHNOLOGY]\n\n"
+                    "This text was extracted from your image using Optical Character Recognition (OCR) "
+                    "with multi-language support. The quality of extraction depends on image clarity "
+                    "and text formatting. You can ask questions about this content just like with any "
+                    "text document.\n\n"
+                    "---------------------------------------------------\n\n"
+                )
+                extracted_text = ocr_info + extracted_text
                 logger.info(f"Successfully extracted text from image: {filename}")
         else:
             # This shouldn't happen due to allowed_file check, but just in case
@@ -726,9 +760,14 @@ def chat_with_document(document_id):
                             attachment_text = extracted_text
                     elif extension in ['.jpg', '.jpeg', '.png']:
                         attachment_type = 'image'
+                        # Log OCR processing for attachment
+                        logger.info(f"Processing attachment image with OCR: {original_filename}")
                         extracted_text, error = extract_text_from_image(file_path)
                         if extracted_text:
-                            attachment_text = extracted_text
+                            # Add OCR header for image attachments
+                            ocr_note = "[Text extracted from the attached image using OCR technology]\n\n"
+                            attachment_text = ocr_note + extracted_text
+                            logger.info(f"Successfully extracted text from image attachment: {original_filename}")
         
         # Retrieve document
         document = Document.query.get(document_id)
