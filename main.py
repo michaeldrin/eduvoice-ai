@@ -546,6 +546,13 @@ def index():
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
         
+    # Initialize session storage for uploads and chat history if not exists
+    if 'uploads' not in session:
+        session['uploads'] = []
+        
+    if 'chat_history' not in session:
+        session['chat_history'] = {}
+        
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
@@ -646,6 +653,24 @@ def upload_file():
             
             # Store document ID in session
             session['last_document_id'] = document.id
+            
+            # Store document metadata in session for history tracking
+            session_document = {
+                'id': document.id,
+                'filename': document.filename,
+                'filetype': document.filetype,
+                'summary': summary[:200] if summary else "",  # Store the first 200 chars
+                'upload_time': document.upload_time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # Add to the beginning of the list (most recent first)
+            session['uploads'].insert(0, session_document)
+            
+            # Initialize empty chat history for this document
+            session['chat_history'][str(document.id)] = []
+            
+            # Make sure to persist the session
+            session.modified = True
             
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
@@ -849,6 +874,27 @@ def chat_with_document(document_id):
         db.session.add(ai_chat)
         db.session.commit()
         
+        # Store messages in session for history tracking
+        doc_id_str = str(document_id)
+        
+        # Add user message to session history
+        session['chat_history'][doc_id_str].append({
+            'role': 'user',
+            'content': user_message,
+            'has_attachment': has_attachment,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+        # Add AI response to session history
+        session['chat_history'][doc_id_str].append({
+            'role': 'assistant',
+            'content': ai_response,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+        # Make sure to persist the session
+        session.modified = True
+        
         # Return both messages
         return jsonify({
             'user_message': user_chat.to_dict(),
@@ -903,11 +949,40 @@ def dashboard():
     # Check if user is in session
     if 'session_id' not in session:
         session['session_id'] = str(uuid.uuid4())
+        
+    # Initialize session storage if not exists
+    if 'uploads' not in session:
+        session['uploads'] = []
+        
+    if 'chat_history' not in session:
+        session['chat_history'] = {}
     
-    # Retrieve user's documents
-    documents = Document.query.filter_by(session_id=session['session_id']).order_by(Document.upload_time.desc()).all()
+    # Retrieve user's documents from database
+    db_documents = Document.query.filter_by(session_id=session['session_id']).order_by(Document.upload_time.desc()).all()
     
-    return render_template('dashboard.html', documents=documents)
+    # Combine database documents with session documents
+    # Session documents have priority to show the most up-to-date information
+    session_doc_ids = [doc['id'] for doc in session['uploads']]
+    
+    # Filter out documents that are already in session
+    additional_docs = []
+    for doc in db_documents:
+        if doc.id not in session_doc_ids:
+            # Add to session for future reference
+            session_document = {
+                'id': doc.id,
+                'filename': doc.filename,
+                'filetype': doc.filetype,
+                'summary': doc.summary[:200] if doc.summary else "",
+                'upload_time': doc.upload_time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            session['uploads'].append(session_document)
+            session.modified = True
+    
+    # Pass the session documents to the template
+    return render_template('dashboard.html', 
+                          session_documents=session['uploads'],
+                          show_history_controls=True)
 
 # Route to serve chat attachment files
 @app.route('/attachments/<path:filename>')
