@@ -47,6 +47,7 @@ class Document(db.Model):
     summary = db.Column(db.Text, nullable=True)
     text_content = db.Column(db.Text, nullable=True)  # Store the extracted text content
     interaction_tips = db.Column(db.Text, nullable=True)  # Store personalized interaction tips
+    learning_suggestions = db.Column(db.Text, nullable=True)  # Store next learning suggestions as JSON
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -65,5 +66,6 @@ class Document(db.Model):
             'summary': self.summary,
             'has_content': self.text_content is not None,
             'has_tips': self.interaction_tips is not None,
+            'has_suggestions': self.learning_suggestions is not None,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S')
         }

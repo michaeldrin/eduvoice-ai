@@ -1019,6 +1019,15 @@ def upload_file():
         if tips_error:
             logger.warning(f"Error generating interaction tips: {tips_error}")
             tips = '["Ask about key topics", "Request explanations of important concepts"]'
+            
+        # Generate learning suggestions
+        suggestions, suggestions_error = generate_learning_suggestions(summary)
+        
+        # If suggestions generation failed, log the error but continue (non-critical)
+        if suggestions_error:
+            logger.warning(f"Error generating learning suggestions: {suggestions_error}")
+            # Default suggestions as JSON string
+            suggestions = '[{"title":"Related Topic 1","description":"Explore similar concepts related to this document content."},{"title":"Advanced Learning","description":"Study more advanced aspects of this subject area."}]'
         
         # Initialize document variable
         document = None
@@ -1037,6 +1046,7 @@ def upload_file():
                 summary=summary,
                 text_content=extracted_text,
                 interaction_tips=tips,
+                learning_suggestions=suggestions,
                 upload_time=datetime.now()
             )
             db.session.add(document)
@@ -1075,6 +1085,7 @@ def upload_file():
             'full_summary': summary,
             'text_content': extracted_text,
             'interaction_tips': tips,
+            'learning_suggestions': suggestions,
             'storage_path': file_path
         }
         
@@ -1131,6 +1142,7 @@ def view_document(document_id):
                     self.summary = doc_dict.get('full_summary', doc_dict.get('summary', 'No summary available'))
                     self.text_content = doc_dict.get('text_content', '')
                     self.interaction_tips = doc_dict.get('interaction_tips', '[]')
+                    self.learning_suggestions = doc_dict.get('learning_suggestions', '[]')
                     self.upload_time = doc_dict.get('upload_time', 'Unknown')
                     self.session_id = session.get('session_id', '')
             

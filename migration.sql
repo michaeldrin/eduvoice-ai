@@ -14,3 +14,6 @@ ALTER TABLE chat_message ADD COLUMN IF NOT EXISTS attachment_type VARCHAR(50);
 
 -- Add attachment_text column
 ALTER TABLE chat_message ADD COLUMN IF NOT EXISTS attachment_text TEXT;
+
+-- Add learning_suggestions column to document table
+ALTER TABLE document ADD COLUMN IF NOT EXISTS learning_suggestions TEXT;
