@@ -1666,6 +1666,148 @@ def view_flashcards(document_id):
         flash(f"An error occurred while retrieving flashcards: {str(e)}")
         return redirect(url_for('dashboard'))
     
+# Route to view quiz for a document
+@app.route('/quiz/<int:document_id>')
+@db_retry(max_retries=3)
+def view_quiz(document_id):
+    """View quiz for a document"""
+    try:
+        # Retrieve document
+        document = Document.query.get_or_404(document_id)
+        
+        # Check if user owns this document
+        if document.session_id != session.get('session_id'):
+            flash("You don't have permission to view this document")
+            return redirect(url_for('index'))
+        
+        # Check if quiz exists in session
+        doc_id_str = str(document_id)
+        quiz_questions = []
+        
+        if 'quizzes' in session and doc_id_str in session['quizzes']:
+            quiz_questions = session['quizzes'][doc_id_str]
+            
+        return render_template(
+            'quiz.html',
+            document=document,
+            quiz_questions=quiz_questions
+        )
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error viewing quiz: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Show error message
+        flash(f"An error occurred while retrieving quiz: {str(e)}")
+        return redirect(url_for('dashboard'))
+
+# Route to generate quiz for a document
+@app.route('/api/quiz/<int:document_id>', methods=['POST'])
+@db_retry(max_retries=3)
+def api_generate_quiz(document_id):
+    """Generate quiz for a document"""
+    try:
+        # Check if user is in session
+        if 'session_id' not in session:
+            return jsonify({'error': 'Session expired. Please refresh the page.'}), 401
+            
+        # Retrieve document
+        document = Document.query.get_or_404(document_id)
+        
+        # Check if user owns this document
+        if document.session_id != session.get('session_id'):
+            return jsonify({'error': 'You do not have permission to access this document'}), 403
+            
+        # Check if document has text content
+        if not document.text_content:
+            return jsonify({'error': 'Document has no extractable content for quiz generation'}), 400
+            
+        # Generate quiz
+        quiz_questions, error = generate_quiz(document.text_content, document_id)
+        
+        if error:
+            return jsonify({'error': error}), 500
+            
+        return jsonify({
+            'success': True,
+            'quiz': quiz_questions
+        })
+        
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error generating quiz: {e}")
+        
+        # Ensure database session is clean
+        db.session.rollback()
+        
+        # Return error message
+        return jsonify({'error': str(e)}), 500
+
+# Route to submit quiz answers and get results
+@app.route('/api/quiz/submit/<int:document_id>', methods=['POST'])
+def submit_quiz(document_id):
+    """Submit quiz answers and get results"""
+    try:
+        # Check if quiz exists in session
+        doc_id_str = str(document_id)
+        if 'quizzes' not in session or doc_id_str not in session['quizzes']:
+            return jsonify({'error': 'Quiz not found. Please generate a quiz first.'}), 404
+            
+        # Get the quiz questions and user answers
+        quiz_questions = session['quizzes'][doc_id_str]
+        user_answers = request.json.get('answers', {})
+        
+        if not user_answers:
+            return jsonify({'error': 'No answers submitted'}), 400
+            
+        # Calculate the score and prepare results
+        results = []
+        correct_count = 0
+        total_count = len(quiz_questions)
+        
+        for i, question in enumerate(quiz_questions):
+            question_idx = str(i)  # Using index as the question identifier
+            
+            user_choice = user_answers.get(question_idx)
+            correct_choice = question['correct_answer']
+            
+            is_correct = user_choice == correct_choice
+            if is_correct:
+                correct_count += 1
+                
+            # Add result for this question
+            results.append({
+                'question': question['question'],
+                'options': question['options'],
+                'user_choice': user_choice,
+                'correct_choice': correct_choice,
+                'is_correct': is_correct
+            })
+            
+        # Calculate percentage score
+        score_percentage = int((correct_count / total_count) * 100) if total_count > 0 else 0
+        
+        # Prepare score data
+        score = {
+            'correct': correct_count,
+            'total': total_count,
+            'percentage': score_percentage
+        }
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'score': score
+        })
+        
+    except Exception as e:
+        # Log the error
+        logger.exception(f"Error submitting quiz: {e}")
+        
+        # Return error message
+        return jsonify({'error': str(e)}), 500
 
 # Route to clear session history
 @app.route('/clear-history')
@@ -1679,6 +1821,9 @@ def clear_history():
     
     if 'flashcards' in session:
         session.pop('flashcards')
+        
+    if 'quizzes' in session:
+        session.pop('quizzes')
     
     # Make sure to persist changes
     session.modified = True
