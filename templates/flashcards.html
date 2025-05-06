@@ -161,9 +161,18 @@
     <div class="alert alert-warning">
         <h3>No flashcards available</h3>
         <p>There are no flashcards generated for this document yet.</p>
-        <a href="{{ url_for('view_document', document_id=document.id) }}" class="btn btn-primary mt-2">
-            Go back to generate flashcards
+        <button id="generate-flashcards-btn" class="btn btn-primary mt-2">
+            <i class="bi bi-card-heading"></i> Generate Flashcards
+        </button>
+        <a href="{{ url_for('view_document', document_id=document.id) }}" class="btn btn-outline-secondary mt-2 ms-2">
+            <i class="bi bi-arrow-left"></i> Go back to document
         </a>
+        
+        <div id="flashcards-loading" class="mt-3 d-none">
+            <div id="flashcards-skeleton-container">
+                <!-- Skeleton will be inserted here via JS -->
+            </div>
+        </div>
     </div>
 {% endif %}
 {% endblock %}
@@ -244,6 +253,48 @@
         // Initialize with the first card
         if (totalCards > 0) {
             showCard(0);
+        }
+        
+        // Handle generate flashcards button
+        const generateFlashcardsBtn = document.getElementById('generate-flashcards-btn');
+        if (generateFlashcardsBtn) {
+            generateFlashcardsBtn.addEventListener('click', function() {
+                generateFlashcards();
+            });
+        }
+        
+        // Function to generate flashcards
+        function generateFlashcards() {
+            const loadingEl = document.getElementById('flashcards-loading');
+            const generateBtn = document.getElementById('generate-flashcards-btn');
+            
+            // Show loading skeleton
+            skeletonLoader.createMultipleCardSkeletons('flashcards-skeleton-container', 3);
+            loadingEl.classList.remove('d-none');
+            generateBtn.disabled = true;
+            
+            // Call API to generate flashcards
+            fetch('/api/generate-flashcards/{{ document.id }}', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload the page to show the flashcards
+                    window.location.reload();
+                } else {
+                    // Show error message
+                    alert(data.error || 'Failed to generate flashcards.');
+                }
+            })
+            .catch(error => {
+                console.error('Error generating flashcards:', error);
+                alert('Network error. Please try again.');
+            })
+            .finally(() => {
+                loadingEl.classList.add('d-none');
+                generateBtn.disabled = false;
+            });
         }
     });
 </script>

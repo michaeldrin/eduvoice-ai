@@ -681,18 +681,20 @@
                         // Show error alert
                         alert(errorMessage);
                         
-                        // Reset button
+                        // Reset button and restore summary content
                         generateFlashcardsBtn.innerHTML = originalBtnContent;
                         generateFlashcardsBtn.disabled = false;
+                        summaryContent.innerHTML = originalSummaryContent;
                     }
                 } catch (error) {
                     // Network error
                     alert('Error: Could not connect to server. Please check your internet connection.');
                     console.error('Network error:', error);
                     
-                    // Reset button
+                    // Reset button and restore summary content
                     generateFlashcardsBtn.innerHTML = originalBtnContent;
                     generateFlashcardsBtn.disabled = false;
+                    summaryContent.innerHTML = originalSummaryContent;
                 }
             });
         };
@@ -731,6 +733,12 @@
                 generateQuizBtn.disabled = true;
                 generateQuizBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
                 
+                // Create skeleton loader for quiz in the summary area
+                const summaryContent = document.getElementById('summary-content');
+                const originalSummaryContent = summaryContent.innerHTML;
+                summaryContent.innerHTML = '<div id="quiz-skeleton-container"></div>';
+                skeletonLoader.createMultipleCardSkeletons('quiz-skeleton-container', 3, 4);
+                
                 try {
                     // Call API to generate quiz
                     const response = await fetch('/api/quiz/{{ document.id }}', {
@@ -761,9 +769,10 @@
                     console.error('Error generating quiz:', error);
                     alert('Network error while generating quiz. Please try again.');
                 } finally {
-                    // Reset button
+                    // Reset button and restore summary content
                     generateQuizBtn.disabled = false;
                     generateQuizBtn.innerHTML = originalBtnContent;
+                    summaryContent.innerHTML = originalSummaryContent;
                 }
             });
         }

@@ -85,10 +85,9 @@
                                 <i class="bi bi-lightning-charge"></i> Generate Quiz
                             </button>
                             <div id="quiz-loading" class="mt-3 d-none">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
+                                <div id="quiz-skeleton-container">
+                                    <!-- Skeleton will be inserted here via JS -->
                                 </div>
-                                <p class="mt-2">Generating quiz questions from document content...</p>
                             </div>
                         </div>
                         
@@ -139,7 +138,8 @@ function generateQuiz() {
     const errorEl = document.getElementById('quiz-error');
     const generateBtn = document.getElementById('generate-quiz-btn');
     
-    // Show loading spinner
+    // Show loading spinner with skeleton loader
+    skeletonLoader.createMultipleCardSkeletons('quiz-skeleton-container', 5, 4);
     loadingEl.classList.remove('d-none');
     errorEl.classList.add('d-none');
     generateBtn.disabled = true;
