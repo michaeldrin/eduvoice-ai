@@ -6,6 +6,7 @@ pytesseract
 PyMuPDF
 pdfplumber
 camelot-py
-gunicornflask_sqlalchemy
+gunicorn
+flask_sqlalchemy
 
 
