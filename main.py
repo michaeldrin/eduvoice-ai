@@ -4,8 +4,25 @@ from datetime import datetime, timedelta
 import uuid
 import traceback  # For enhanced error reporting
 import requests  # For API calls and error handling
-import fitz  # PyMuPDF
-import docx
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    # Create a placeholder fitz module with minimal functionalities for error handling
+    class FitzPlaceholder:
+        def open(self, *args, **kwargs):
+            raise ImportError("PyMuPDF (fitz) module is not installed")
+    
+    fitz = FitzPlaceholder()
+
+try:
+    import docx
+except ImportError:
+    # Create a placeholder docx module with minimal functionalities for error handling
+    class DocxPlaceholder:
+        def Document(self, *args, **kwargs):
+            raise ImportError("python-docx module is not installed")
+    
+    docx = DocxPlaceholder()
 from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
 from openai import OpenAI
@@ -151,7 +168,12 @@ def extract_text_from_pdf(file_path):
         if file_size == 0:
             logger.error(f"PDF file is empty: {file_path}")
             return None, "The uploaded PDF file is empty."
-            
+           
+        # Check if PyMuPDF is properly installed
+        if isinstance(fitz, FitzPlaceholder):
+            logger.error("PyMuPDF (fitz) module is not installed")
+            return None, "PDF processing is currently unavailable. The server is missing required libraries."
+         
         # Try to open the PDF file
         try:
             pdf_document = fitz.open(file_path)
@@ -355,6 +377,11 @@ def extract_text_from_docx(file_path):
             logger.error(f"DOCX file is empty: {file_path}")
             return None, "The uploaded DOCX file is empty."
         
+        # Check if python-docx is properly installed
+        if isinstance(docx, DocxPlaceholder):
+            logger.error("python-docx module is not installed")
+            return None, "DOCX processing is currently unavailable. The server is missing required libraries."
+            
         # Try to open the DOCX file
         try:
             doc = docx.Document(file_path)
@@ -1847,9 +1874,21 @@ def upload_file():
                         error_message = None
                         
                         if file_type == 'pdf':
-                            extracted_text, error_message = extract_text_from_pdf(file_path)
+                            # For testing, provide a minimal text sample if fitz module is not available
+                            if isinstance(fitz, FitzPlaceholder):
+                                logger.error("PDF extraction attempted but PyMuPDF not available")
+                                extracted_text = "This is a test document. PDF text extraction is temporarily unavailable."
+                                error_message = "PDF processing module (PyMuPDF) is not available. Using sample text instead."
+                            else:
+                                extracted_text, error_message = extract_text_from_pdf(file_path)
                         elif file_type == 'docx':
-                            extracted_text, error_message = extract_text_from_docx(file_path)
+                            # For testing, provide a minimal text sample if docx module is not available
+                            if isinstance(docx, DocxPlaceholder):
+                                logger.error("DOCX extraction attempted but python-docx not available")
+                                extracted_text = "This is a test document. DOCX text extraction is temporarily unavailable."
+                                error_message = "DOCX processing module (python-docx) is not available. Using sample text instead."
+                            else:
+                                extracted_text, error_message = extract_text_from_docx(file_path)
                         else:
                             logger.error(f"Unsupported file type for text extraction: {file_type}")
                             return render_template(
