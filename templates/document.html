@@ -50,12 +50,29 @@
                 </div>
                 
                 <div class="mt-auto p-3 border-top">
-                    <form id="chat-form" class="d-flex">
-                        <input type="text" id="user-message" class="form-control" 
-                               placeholder="Ask about the document..." required>
-                        <button type="submit" class="btn btn-primary ms-2">
-                            <i class="bi bi-send"></i>
-                        </button>
+                    <form id="chat-form" enctype="multipart/form-data">
+                        <div class="d-flex align-items-center">
+                            <input type="text" id="user-message" class="form-control" 
+                                   placeholder="Ask about the document..." required>
+                            <label for="file-upload" class="btn btn-outline-secondary ms-2" title="Attach a file">
+                                <i class="bi bi-paperclip"></i>
+                                <span class="visually-hidden">Attach file</span>
+                            </label>
+                            <input type="file" id="file-upload" class="d-none" 
+                                   accept=".pdf,.docx,.txt,.jpg,.jpeg,.png">
+                            <button type="submit" class="btn btn-primary ms-2">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        </div>
+                        <div id="attachment-preview" class="mt-2 small d-none">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-file-earmark me-1"></i>
+                                <span id="attachment-name"></span>
+                                <button type="button" id="remove-attachment" class="btn btn-sm text-danger ms-2">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -131,9 +148,14 @@
         const printSummaryBtn = document.getElementById('print-summary');
         const tipsCollapseIcon = document.getElementById('tipsCollapseIcon');
         const interactionTipsContent = document.getElementById('interactionTipsContent');
+        const fileUploadInput = document.getElementById('file-upload');
+        const attachmentPreview = document.getElementById('attachment-preview');
+        const attachmentName = document.getElementById('attachment-name');
+        const removeAttachmentBtn = document.getElementById('remove-attachment');
         
         // Variables to track state
         let isProcessing = false;
+        let currentAttachment = null;
         const MAX_RETRIES = 2;
         
         // Auto-scroll chat to bottom
@@ -312,6 +334,177 @@
                 }
             });
         }
+        
+        // Handle file upload
+        fileUploadInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // Store the selected file
+                currentAttachment = file;
+                
+                // Update UI to show the attachment
+                attachmentName.textContent = file.name;
+                attachmentPreview.classList.remove('d-none');
+                
+                // Set appropriate icon based on file type
+                const fileIcon = attachmentPreview.querySelector('i.bi');
+                if (file.type.includes('image')) {
+                    fileIcon.className = 'bi bi-image me-1';
+                } else if (file.name.endsWith('.pdf')) {
+                    fileIcon.className = 'bi bi-file-pdf me-1';
+                } else if (file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+                    fileIcon.className = 'bi bi-file-word me-1';
+                } else if (file.name.endsWith('.txt')) {
+                    fileIcon.className = 'bi bi-file-text me-1';
+                } else {
+                    fileIcon.className = 'bi bi-file-earmark me-1';
+                }
+            }
+        });
+        
+        // Handle remove attachment button
+        removeAttachmentBtn.addEventListener('click', function() {
+            // Clear the file input
+            fileUploadInput.value = '';
+            
+            // Reset attachment state
+            currentAttachment = null;
+            attachmentPreview.classList.add('d-none');
+        });
+        
+        // Update the chat form submission to handle file uploads
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Get the user message and trim whitespace
+            const userMessage = userMessageInput.value.trim();
+            
+            // Validate message
+            if (!userMessage || isProcessing) return;
+            
+            // Set processing flag
+            isProcessing = true;
+            
+            // Disable input and change button to spinner
+            userMessageInput.disabled = true;
+            const submitBtn = chatForm.querySelector('button[type="submit"]');
+            const originalBtnContent = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            submitBtn.disabled = true;
+            
+            // Clear input
+            userMessageInput.value = '';
+            
+            // Create display message (show attachment indicator if present)
+            let displayMessage = userMessage;
+            if (currentAttachment) {
+                displayMessage += `\n[Attached file: ${currentAttachment.name}]`;
+            }
+            
+            // Add user message to chat
+            const userMessageElement = addMessageToChat('user', displayMessage);
+            
+            // Show loading indicator
+            loadingMessage.classList.remove('d-none');
+            scrollToBottom();
+            
+            let retryCount = 0;
+            let success = false;
+            
+            while (retryCount <= MAX_RETRIES && !success) {
+                try {
+                    let response;
+                    
+                    // Handle request based on whether there's an attachment
+                    if (currentAttachment) {
+                        // Create FormData for multipart request
+                        const formData = new FormData();
+                        formData.append('message', userMessage);
+                        formData.append('attachment', currentAttachment);
+                        
+                        // Send multipart request
+                        response = await fetch('/api/chat/{{ document.id }}', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        // Clear the attachment after sending
+                        fileUploadInput.value = '';
+                        currentAttachment = null;
+                        attachmentPreview.classList.add('d-none');
+                    } else {
+                        // Send JSON request for message-only
+                        response = await fetch('/api/chat/{{ document.id }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ message: userMessage })
+                        });
+                    }
+                    
+                    // Hide loading indicator
+                    loadingMessage.classList.add('d-none');
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Check for warning in the response
+                        if (data.warning) {
+                            console.warn('API warning:', data.warning);
+                        }
+                        
+                        // Add AI response to chat
+                        addMessageToChat('assistant', data.ai_response.content);
+                        success = true;
+                    } else {
+                        // Try to parse error response
+                        let errorMessage = 'Failed to get response';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                            if (errorData.details) {
+                                errorMessage += `: ${errorData.details}`;
+                            }
+                        } catch (parseError) {
+                            errorMessage = `Error (${response.status}): Failed to get response`;
+                        }
+                        
+                        // If it's a server error (5xx), we can retry
+                        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+                            console.log(`Retry attempt ${retryCount + 1} for server error`);
+                            retryCount++;
+                            await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
+                            continue;
+                        }
+                        
+                        // Add error message for client errors or after max retries
+                        addMessageToChat('assistant', `Error: ${errorMessage}`);
+                        success = true; // We're done trying
+                    }
+                } catch (error) {
+                    // Network error - we can retry
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Retry attempt ${retryCount + 1} for network error: ${error.message}`);
+                        retryCount++;
+                        await new Promise(r => setTimeout(r, 1000 * retryCount)); // Exponential backoff
+                    } else {
+                        // Hide loading indicator
+                        loadingMessage.classList.add('d-none');
+                        
+                        // Add error message after max retries
+                        addMessageToChat('assistant', 'Error: Could not connect to server. Please check your internet connection.');
+                        console.error('Error:', error);
+                        success = true; // We're done trying
+                    }
+                }
+            }
+            
+            // Reset UI state
+            userMessageInput.disabled = false;
+            submitBtn.innerHTML = originalBtnContent;
+            submitBtn.disabled = false;
+            userMessageInput.focus();
+            isProcessing = false;
+        });
     });
 </script>
 {% endblock %}

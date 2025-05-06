@@ -21,4 +21,6 @@ dependencies = [
     "authlib>=1.5.2",
     "requests>=2.32.3",
     "trafilatura>=2.0.0",
+    "pytesseract>=0.3.13",
+    "pillow>=11.2.1",
 ]
