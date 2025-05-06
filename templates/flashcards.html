@@ -1,0 +1,250 @@
+{% extends "layout.html" %}
+
+{% block title %}Flashcards for {{ document.filename }}{% endblock %}
+
+{% block styles %}
+<style>
+    /* Flashcard styles */
+    .flashcard-container {
+        perspective: 1000px;
+        margin-bottom: 2rem;
+    }
+    
+    .flashcard {
+        position: relative;
+        width: 100%;
+        height: 220px;
+        transition: transform 0.5s;
+        transform-style: preserve-3d;
+        cursor: pointer;
+    }
+    
+    .flashcard.flipped {
+        transform: rotateY(180deg);
+    }
+    
+    .flashcard-front, .flashcard-back {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        padding: 1.5rem;
+        backface-visibility: hidden;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow-y: auto;
+    }
+    
+    .flashcard-front {
+        background-color: var(--bs-primary-bg-subtle);
+        border: 1px solid var(--bs-primary-border-subtle);
+        z-index: 2;
+    }
+    
+    .flashcard-back {
+        background-color: var(--bs-info-bg-subtle);
+        border: 1px solid var(--bs-info-border-subtle);
+        transform: rotateY(180deg);
+    }
+    
+    .flashcard-header {
+        font-size: 0.875rem;
+        color: var(--bs-secondary-color);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    
+    .flashcard-content {
+        font-size: 1.25rem;
+        line-height: 1.5;
+    }
+    
+    .flip-instruction {
+        position: absolute;
+        bottom: 0.5rem;
+        right: 1rem;
+        font-size: 0.75rem;
+        font-style: italic;
+        color: var(--bs-secondary-color);
+    }
+    
+    /* Navigation styles */
+    .nav-cards {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
+    
+    .progress-indicator {
+        margin-bottom: 1rem;
+        text-align: center;
+        color: var(--bs-secondary-color);
+        font-size: 0.9rem;
+    }
+    
+    /* Controls */
+    .flashcards-controls {
+        margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 576px) {
+        .flashcard {
+            height: 250px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Flashcards</h1>
+    <div>
+        <a href="{{ url_for('view_document', document_id=document.id) }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Back to Document
+        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+            <i class="bi bi-grid"></i> Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-info mb-4">
+    <strong>Document:</strong> {{ document.filename }}
+    <p class="mb-0 mt-2">
+        These flashcards were generated based on the content of your document. 
+        Click on a card to flip between question and answer.
+    </p>
+</div>
+
+{% if flashcards|length > 0 %}
+    <div class="flashcards-controls">
+        <div class="progress-indicator">
+            Card <span id="current-card">1</span> of {{ flashcards|length }}
+        </div>
+        <div class="nav-cards">
+            <button id="prev-card" class="btn btn-outline-secondary me-2" disabled>
+                <i class="bi bi-arrow-left"></i> Previous
+            </button>
+            <button id="next-card" class="btn btn-primary">
+                Next <i class="bi bi-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div id="flashcards-container" class="row">
+        {% for card in flashcards %}
+            <div class="col-12 flashcard-container {% if not loop.first %}d-none{% endif %}" data-index="{{ loop.index0 }}">
+                <div class="flashcard">
+                    <div class="flashcard-front">
+                        <div class="flashcard-header">Question</div>
+                        <div class="flashcard-content">{{ card.question }}</div>
+                        <div class="flip-instruction">Click to flip for answer</div>
+                    </div>
+                    <div class="flashcard-back">
+                        <div class="flashcard-header">Answer</div>
+                        <div class="flashcard-content">{{ card.answer }}</div>
+                        <div class="flip-instruction">Click to flip for question</div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="text-center mt-5">
+        <p class="text-muted">Want to learn with these flashcards again later?</p>
+        <p>They will be available in your session until you clear your history</p>
+    </div>
+{% else %}
+    <div class="alert alert-warning">
+        <h3>No flashcards available</h3>
+        <p>There are no flashcards generated for this document yet.</p>
+        <a href="{{ url_for('view_document', document_id=document.id) }}" class="btn btn-primary mt-2">
+            Go back to generate flashcards
+        </a>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get elements
+        const flashcards = document.querySelectorAll('.flashcard');
+        const flashcardContainers = document.querySelectorAll('.flashcard-container');
+        const prevButton = document.getElementById('prev-card');
+        const nextButton = document.getElementById('next-card');
+        const currentCardIndicator = document.getElementById('current-card');
+        
+        // Initialize variables
+        let currentCardIndex = 0;
+        const totalCards = flashcardContainers.length;
+        
+        // Add click event to flip cards
+        flashcards.forEach(card => {
+            card.addEventListener('click', function() {
+                this.classList.toggle('flipped');
+            });
+        });
+        
+        // Navigation functions
+        function showCard(index) {
+            // Hide all cards
+            flashcardContainers.forEach(container => {
+                container.classList.add('d-none');
+            });
+            
+            // Show the current card
+            flashcardContainers[index].classList.remove('d-none');
+            
+            // Update the indicator
+            currentCardIndicator.textContent = index + 1;
+            
+            // Update button states
+            prevButton.disabled = index === 0;
+            nextButton.disabled = index === totalCards - 1;
+            
+            // Update the card index
+            currentCardIndex = index;
+            
+            // Reset flip state for the current card
+            flashcards[index].classList.remove('flipped');
+        }
+        
+        // Add navigation button handlers
+        if (prevButton && nextButton) {
+            prevButton.addEventListener('click', function() {
+                if (currentCardIndex > 0) {
+                    showCard(currentCardIndex - 1);
+                }
+            });
+            
+            nextButton.addEventListener('click', function() {
+                if (currentCardIndex < totalCards - 1) {
+                    showCard(currentCardIndex + 1);
+                }
+            });
+        }
+        
+        // Add keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft' && currentCardIndex > 0) {
+                showCard(currentCardIndex - 1);
+            } else if (e.key === 'ArrowRight' && currentCardIndex < totalCards - 1) {
+                showCard(currentCardIndex + 1);
+            } else if (e.key === ' ' || e.key === 'Enter') {
+                // Flip the current card
+                flashcards[currentCardIndex].classList.toggle('flipped');
+                e.preventDefault();
+            }
+        });
+        
+        // Initialize with the first card
+        if (totalCards > 0) {
+            showCard(0);
+        }
+    });
+</script>
+{% endblock %}

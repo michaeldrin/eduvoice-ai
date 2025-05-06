@@ -50,11 +50,19 @@
                             </p>
                         {% endif %}
                     </div>
-                    <div class="card-footer d-flex justify-content-between">
+                    <div class="card-footer d-flex flex-wrap justify-content-between gap-2">
                         <a href="{{ url_for('view_document', document_id=document.id) }}" 
                            class="btn btn-primary btn-sm">View Analysis</a>
-                        <a href="{{ url_for('view_document', document_id=document.id) }}#chat" 
-                           class="btn btn-outline-secondary btn-sm">Resume Chat</a>
+                        <div>
+                            {% if 'flashcards' in session and document.id|string in session['flashcards'] %}
+                            <a href="{{ url_for('view_flashcards', document_id=document.id) }}" 
+                               class="btn btn-info btn-sm me-1">
+                                <i class="bi bi-card-heading"></i> Flashcards
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('view_document', document_id=document.id) }}#chat" 
+                               class="btn btn-outline-secondary btn-sm">Resume Chat</a>
+                        </div>
                     </div>
                 </div>
             </div>

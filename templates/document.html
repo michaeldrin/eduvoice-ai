@@ -65,6 +65,15 @@
     {% if document.filetype in ['jpg', 'jpeg', 'png'] %}
     <span class="ocr-badge ms-2">OCR</span>
     {% endif %}
+    
+    {% if 'flashcards' in session and document.id|string in session['flashcards'] %}
+    <div class="mt-2">
+        <a href="{{ url_for('view_flashcards', document_id=document.id) }}" class="btn btn-info btn-sm">
+            <i class="bi bi-card-heading"></i> View Flashcards
+        </a>
+        <small class="text-muted ms-2">{{ session['flashcards'][document.id|string]|length }} cards available</small>
+    </div>
+    {% endif %}
 </div>
 
 {% if document.filetype in ['jpg', 'jpeg', 'png'] %}
@@ -627,6 +636,57 @@
         printSummaryBtn.addEventListener('click', function() {
             window.print();
         });
+        
+        // Handle flashcard generation
+        const generateFlashcardsBtn = document.getElementById('generate-flashcards');
+        if (generateFlashcardsBtn) {
+            generateFlashcardsBtn.addEventListener('click', async function() {
+                // Disable button and show loading state
+                const originalBtnContent = generateFlashcardsBtn.innerHTML;
+                generateFlashcardsBtn.disabled = true;
+                generateFlashcardsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+                
+                try {
+                    // Call API to generate flashcards
+                    const response = await fetch('/api/generate-flashcards/{{ document.id }}', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // If flashcards generated successfully, redirect to flashcards page
+                        window.location.href = '/flashcards/{{ document.id }}';
+                    } else {
+                        // Handle error
+                        let errorMessage = 'Failed to generate flashcards';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                            if (errorData.details) {
+                                errorMessage += `: ${errorData.details}`;
+                            }
+                        } catch (parseError) {
+                            errorMessage = `Error (${response.status}): ${errorMessage}`;
+                        }
+                        
+                        // Show error alert
+                        alert(errorMessage);
+                        
+                        // Reset button
+                        generateFlashcardsBtn.innerHTML = originalBtnContent;
+                        generateFlashcardsBtn.disabled = false;
+                    }
+                } catch (error) {
+                    // Network error
+                    alert('Error: Could not connect to server. Please check your internet connection.');
+                    console.error('Network error:', error);
+                    
+                    // Reset button
+                    generateFlashcardsBtn.innerHTML = originalBtnContent;
+                    generateFlashcardsBtn.disabled = false;
+                }
+            });
+        };
         
         // Add Enter key handling (submit on Enter, new line on Shift+Enter)
         userMessageInput.addEventListener('keydown', function(e) {
