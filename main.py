@@ -539,19 +539,21 @@ def generate_quiz(document_text, document_id):
         # Initialize OpenAI client
         client = OpenAI(api_key=api_key)
         
-        # Create system prompt
-        system_prompt = """Generate 5 multiple choice questions based on the document provided.
-        Each question should have:
-        - The question text
-        - 4 answer options (A, B, C, D)
-        - Indicate which option is correct
+        # Create an improved system prompt with stricter formatting requirements
+        system_prompt = """You are an education quiz generator that creates high-quality multiple choice questions based on documents. 
         
-        Format your response as a JSON array of objects with these keys:
-        - question: the text of the question
-        - options: an object with keys A, B, C, D containing the text of each option
-        - correct_answer: the letter of the correct option (A, B, C, or D)
+        IMPORTANT: Generate exactly 5 multiple choice questions based on the document provided. Each question should:
+        1. Be clearly based on information found in the document
+        2. Have exactly 4 answer options labeled A, B, C, and D
+        3. Have exactly one correct answer
+        4. Focus on important concepts rather than trivial details
         
-        Example format:
+        You MUST format your response as a valid JSON array of objects with these exact keys:
+        - "question": the text of the question (string)
+        - "options": an object with keys A, B, C, D containing the text of each option (object)
+        - "correct_answer": the letter of the correct option (string, one of: "A", "B", "C", or "D")
+        
+        Required format example:
         [
             {
                 "question": "What is the capital of France?",
@@ -564,12 +566,21 @@ def generate_quiz(document_text, document_id):
                 "correct_answer": "C"
             }
         ]
+        
+        DO NOT include any explanation or additional text outside the JSON array.
+        DO NOT use any other format.
         """
         
         # Create user prompt with truncated document text
-        user_prompt = f"""Generate a multiple-choice quiz based on this document:
-
-        {document_text[:4000]}  # Limiting input to first 4000 chars to avoid token limits
+        doc_text_truncated = document_text[:4000]  # Limiting input to first 4000 chars to avoid token limits
+        user_prompt = f"""Please generate a multiple-choice quiz based on this document content.
+        Create questions that test understanding of key concepts, important facts, and main ideas.
+        The quiz should help students review and reinforce their understanding of the material.
+        
+        Document content:
+        {doc_text_truncated}
+        
+        Remember to follow the format specified in the system instructions exactly.
         """
         
         # Generate quiz
@@ -608,22 +619,51 @@ def generate_quiz(document_text, document_id):
                         quiz_questions = value
                         break
             
-            # Validate each quiz question
+            # Validate each quiz question with improved validation logic
             valid_questions = []
             for question in quiz_questions:
-                if (isinstance(question, dict) and 
-                    'question' in question and 
-                    'options' in question and
-                    'correct_answer' in question and
-                    isinstance(question['options'], dict) and
-                    all(option in question['options'] for option in ['A', 'B', 'C', 'D']) and
-                    question['correct_answer'] in ['A', 'B', 'C', 'D']):
-                    
-                    valid_questions.append({
-                        'question': question['question'],
-                        'options': question['options'],
-                        'correct_answer': question['correct_answer']
-                    })
+                # Skip if not a dictionary
+                if not isinstance(question, dict):
+                    logger.warning(f"Skipping quiz question that is not a dict: {type(question)}")
+                    continue
+                
+                # Check for required fields
+                if not all(key in question for key in ['question', 'options', 'correct_answer']):
+                    logger.warning(f"Skipping quiz question missing required fields: {question.keys()}")
+                    continue
+                
+                # If options isn't a dict, try to convert it
+                if not isinstance(question['options'], dict):
+                    logger.warning(f"Question options is not a dict, attempting to fix: {type(question['options'])}")
+                    # Try to convert options to a dict if it's a list
+                    if isinstance(question['options'], list) and len(question['options']) >= 4:
+                        options_dict = {
+                            'A': question['options'][0],
+                            'B': question['options'][1],
+                            'C': question['options'][2],
+                            'D': question['options'][3]
+                        }
+                        question['options'] = options_dict
+                    else:
+                        # Can't convert, skip this question
+                        continue
+                
+                # Check if options has at least the keys A, B, C, D
+                if not all(option in question['options'] for option in ['A', 'B', 'C', 'D']):
+                    logger.warning(f"Skipping quiz question with invalid options keys: {question['options'].keys()}")
+                    continue
+                
+                # Check if correct_answer is valid
+                if question['correct_answer'] not in ['A', 'B', 'C', 'D']:
+                    logger.warning(f"Skipping quiz question with invalid correct_answer: {question['correct_answer']}")
+                    continue
+                
+                # If we got here, the question is valid
+                valid_questions.append({
+                    'question': question['question'],
+                    'options': question['options'],
+                    'correct_answer': question['correct_answer']
+                })
             
             if not valid_questions:
                 return None, "Failed to generate valid quiz questions from the document content."
