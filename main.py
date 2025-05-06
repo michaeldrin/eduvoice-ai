@@ -204,6 +204,56 @@ def generate_summary(text):
         logger.exception(f"Error generating summary: {e}")
         return None, f"Error generating summary: {str(e)}"
 
+# Generate personalized interaction tips
+def generate_interaction_tips(document_summary, filetype):
+    """
+    Generate personalized document interaction tips based on the document summary
+    
+    Args:
+        document_summary: The summary of the document
+        filetype: The type of document (PDF, DOCX, etc.)
+        
+    Returns:
+        List of interaction tips, or None and error message if generation fails
+    """
+    try:
+        # Check for API key
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.error("OpenAI API key not found in environment variables")
+            return None, "OpenAI API key not configured. Please contact the administrator."
+            
+        # Initialize OpenAI client
+        client = OpenAI(api_key=api_key)
+        
+        # Create prompt for generating tips
+        prompt = f"""Based on the following document summary, generate 5 personalized tips for interacting with and learning from this document.
+        These tips should help the user ask better questions and get more value from the AI chat feature.
+        Each tip should be specific to the document content, not generic advice.
+        Format the response as a list of tips, each starting with a number and a brief title, followed by a short explanation.
+        
+        Document type: {filetype}
+        Document summary: {document_summary[:1000]}  # Limiting to first 1000 chars
+        
+        INTERACTION TIPS:"""
+        
+        # Generate tips
+        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+        # do not change this unless explicitly requested by the user
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=800,
+            temperature=0.7
+        )
+        
+        tips = response.choices[0].message.content.strip()
+        return tips, None
+        
+    except Exception as e:
+        logger.exception(f"Error generating interaction tips: {e}")
+        return None, f"Error generating tips: {str(e)}"
+
 # Simple text similarity search function
 def simple_text_search(query, document_text, chunk_size=1000, overlap=200, top_k=3):
     """
@@ -395,6 +445,14 @@ def upload_file():
         if summary_error:
             flash(f"Error generating summary: {summary_error}")
             return redirect(url_for('index'))
+            
+        # Generate interaction tips
+        tips, tips_error = generate_interaction_tips(summary, filetype)
+        
+        # If tips generation failed, log the error but continue (non-critical)
+        if tips_error:
+            logger.warning(f"Error generating interaction tips: {tips_error}")
+            tips = None
         
         # Initialize document variable
         document = None
@@ -407,6 +465,7 @@ def upload_file():
                 filetype=filetype,
                 summary=summary,
                 text_content=extracted_text,
+                interaction_tips=tips,
                 upload_time=datetime.now()
             )
             db.session.add(document)

@@ -37,6 +37,7 @@ class Document(db.Model):
     filetype = db.Column(db.String(50), nullable=False)
     summary = db.Column(db.Text, nullable=True)
     text_content = db.Column(db.Text, nullable=True)  # Store the extracted text content
+    interaction_tips = db.Column(db.Text, nullable=True)  # Store personalized interaction tips
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -54,5 +55,6 @@ class Document(db.Model):
             'filetype': self.filetype,
             'summary': self.summary,
             'has_content': self.text_content is not None,
+            'has_tips': self.interaction_tips is not None,
             'upload_time': self.upload_time.strftime('%Y-%m-%d %H:%M:%S')
         }

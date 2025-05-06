@@ -60,6 +60,28 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Interaction Tips Panel -->
+        {% if document.interaction_tips %}
+        <div class="card mt-4 no-print interaction-tips-card">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Interaction Tips</h2>
+                <button type="button" class="btn btn-sm btn-light" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#interactionTipsContent" 
+                        aria-expanded="true">
+                    <i class="bi bi-chevron-up" id="tipsCollapseIcon"></i>
+                </button>
+            </div>
+            <div class="collapse show" id="interactionTipsContent">
+                <div class="card-body">
+                    <div class="tips-container">
+                        {{ document.interaction_tips|nl2br }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <!-- Summary Panel -->
@@ -107,6 +129,8 @@
         const chatMessagesContainer = document.getElementById('chat-messages');
         const loadingMessage = document.getElementById('loading-message');
         const printSummaryBtn = document.getElementById('print-summary');
+        const tipsCollapseIcon = document.getElementById('tipsCollapseIcon');
+        const interactionTipsContent = document.getElementById('interactionTipsContent');
         
         // Variables to track state
         let isProcessing = false;
@@ -271,6 +295,23 @@
                 chatForm.dispatchEvent(new Event('submit'));
             }
         });
+        
+        // Handle interaction tips collapse
+        if (interactionTipsContent) {
+            interactionTipsContent.addEventListener('hide.bs.collapse', function () {
+                if (tipsCollapseIcon) {
+                    tipsCollapseIcon.classList.remove('bi-chevron-up');
+                    tipsCollapseIcon.classList.add('bi-chevron-down');
+                }
+            });
+            
+            interactionTipsContent.addEventListener('show.bs.collapse', function () {
+                if (tipsCollapseIcon) {
+                    tipsCollapseIcon.classList.remove('bi-chevron-down');
+                    tipsCollapseIcon.classList.add('bi-chevron-up');
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
