@@ -1,0 +1,9 @@
+flask
+openai
+gtts
+python-docx
+pytesseract
+PyMuPDF
+pdfplumber
+camelot-py
+gunicorn
