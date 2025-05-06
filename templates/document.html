@@ -48,6 +48,29 @@
         margin-left: 8px;
         vertical-align: middle;
     }
+    
+    /* Styling for Next Learning Suggestions */
+    .suggestion-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid var(--bs-border-color);
+    }
+    
+    .suggestion-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        border-color: var(--bs-info);
+    }
+    
+    .suggestion-card .card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--bs-info);
+    }
+    
+    .suggestion-card .card-text {
+        font-size: 0.9rem;
+        color: var(--bs-secondary-color);
+    }
 </style>
 {% endblock %}
 
@@ -282,6 +305,58 @@
             </div>
         </div>
     </div>
+    
+    <!-- Next Learning Suggestions Section -->
+    {% if document.learning_suggestions %}
+    <div class="col-12 mt-4 no-print">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h2 class="h5 mb-0">📘 Next Learning Suggestions</h2>
+            </div>
+            <div class="card-body">
+                <div class="row" id="learning-suggestions">
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            try {
+                                const suggestions = JSON.parse('{{ document.learning_suggestions|safe }}');
+                                const container = document.getElementById('learning-suggestions');
+                                
+                                if (suggestions && Array.isArray(suggestions) && suggestions.length > 0) {
+                                    suggestions.forEach(suggestion => {
+                                        const card = document.createElement('div');
+                                        card.className = 'col-md-6 col-lg-3 mb-3';
+                                        card.innerHTML = `
+                                            <div class="card h-100 suggestion-card">
+                                                <div class="card-body">
+                                                    <h5 class="card-title">${suggestion.title}</h5>
+                                                    <p class="card-text">${suggestion.description}</p>
+                                                </div>
+                                                <div class="card-footer bg-transparent">
+                                                    <a href="https://www.google.com/search?q=${encodeURIComponent(suggestion.title)}" 
+                                                       class="btn btn-sm btn-outline-info w-100" 
+                                                       target="_blank">
+                                                        Learn More <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        `;
+                                        container.appendChild(card);
+                                    });
+                                } else {
+                                    container.innerHTML = '<div class="col-12"><div class="alert alert-info">No learning suggestions available for this document.</div></div>';
+                                }
+                            } catch (e) {
+                                console.error('Error parsing learning suggestions:', e);
+                                document.getElementById('learning-suggestions').innerHTML = 
+                                    '<div class="col-12"><div class="alert alert-danger">Error loading learning suggestions.</div></div>';
+                            }
+                        });
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Print-only version -->
