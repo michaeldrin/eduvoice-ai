@@ -1,205 +1,66 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="{{ theme_mode }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
-    <!-- Use Replit-themed Bootstrap CSS -->
-    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <!-- Custom styles -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <!-- Accessibility styles -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/accessibility.css') }}">
-    <style>
-        .dashboard-header {
-            padding: 2rem 0;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid var(--bs-border-color);
-        }
-        .table-responsive {
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .summary-preview {
-            max-height: 100px;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            text-overflow: ellipsis;
-        }
-        .action-buttons .btn {
-            margin-right: 0.25rem;
-        }
-        .no-documents-message {
-            padding: 3rem 0;
-            text-align: center;
-        }
-    </style>
-</head>
-<body class="{{ accessibility_classes }}">
-    <!-- Reading ruler for accessibility (only shown if enabled) -->
-    <div class="reading-ruler"></div>
-    
-    <!-- Include the new navbar component -->
-    {% include 'components/navbar.html' %}
-    
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        <div class="dashboard-header">
-                            <h1 class="display-5 mb-2">Upload History</h1>
-                            <p class="text-muted">A record of all your processed documents</p>
-                        </div>
-                        
-                        <!-- Include usage stats component -->
-                        {% include 'usage_stats.html' %}
-                        
-                        {% if error %}
-                            <div class="alert alert-danger" role="alert">
-                                {{ error }}
-                            </div>
-                        {% endif %}
-                        
-                        {% if documents and documents|length > 0 %}
-                            <div class="table-responsive">
-                                <table class="table table-hover align-middle">
-                                    <thead>
-                                        <tr>
-                                            <th>Filename</th>
-                                            <th>Type</th>
-                                            <th>Summary</th>
-                                            <th>Upload Date</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for document in documents %}
-                                            <tr>
-                                                <td>{{ document.filename }}</td>
-                                                <td><span class="badge bg-primary">{{ document.filetype }}</span></td>
-                                                <td>
-                                                    {% if document.summary %}
-                                                        <div class="summary-preview">{{ document.summary }}</div>
-                                                    {% else %}
-                                                        <span class="text-muted">No summary available</span>
-                                                    {% endif %}
-                                                </td>
-                                                <td>{{ document.upload_time.strftime('%Y-%m-%d %H:%M') }}</td>
-                                                <td class="action-buttons">
-                                                    {% if document.text_filename %}
-                                                        <a href="{{ url_for('download_summary_text', filename=document.text_filename) }}" 
-                                                           class="btn btn-sm btn-success" 
-                                                           title="Download Summary Text">
-                                                            <i class="bi bi-file-text"></i>
-                                                        </a>
-                                                    {% endif %}
-                                                    
-                                                    {% if document.audio_filename %}
-                                                        <a href="{{ url_for('download_audio', filename=document.audio_filename) }}" 
-                                                           class="btn btn-sm btn-info" 
-                                                           title="Download Audio">
-                                                            <i class="bi bi-file-music"></i>
-                                                        </a>
-                                                        <a href="javascript:void(0);" 
-                                                           class="btn btn-sm btn-primary play-audio" 
-                                                           data-audio-url="{{ url_for('static', filename='audio/' + document.audio_filename) }}"
-                                                           title="Play Audio">
-                                                            <i class="bi bi-play-fill"></i>
-                                                        </a>
-                                                    {% endif %}
-                                                    
-                                                    {% if document.text_content %}
-                                                        <a href="{{ url_for('document_chat', document_id=document.id) }}" 
-                                                           class="btn btn-sm btn-secondary" 
-                                                           title="Chat with Document">
-                                                            <i class="bi bi-chat-dots"></i>
-                                                        </a>
-                                                        <a href="{{ url_for('document_questions', document_id=document.id) }}" 
-                                                           class="btn btn-sm btn-success" 
-                                                           title="Questions & Notes">
-                                                            <i class="bi bi-question-circle"></i>
-                                                        </a>
-                                                    {% endif %}
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+{% extends "layout.html" %}
+
+{% block title %}Dashboard - Your Documents{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Your Documents</h1>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Upload New Document
+    </a>
+</div>
+
+{% if documents|length > 0 %}
+    <div class="row">
+        {% for document in documents %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0 text-truncate" title="{{ document.filename }}">
+                            {% if document.filetype == 'pdf' %}
+                                <i class="bi bi-file-pdf text-danger"></i>
+                            {% elif document.filetype == 'docx' %}
+                                <i class="bi bi-file-word text-primary"></i>
+                            {% else %}
+                                <i class="bi bi-file-text"></i>
+                            {% endif %}
+                            {{ document.filename }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            <small class="text-muted">Uploaded: {{ document.upload_time }}</small>
+                        </p>
+                        {% if document.summary %}
+                            <p class="card-text text-truncate">
+                                {{ document.summary|striptags|truncate(100) }}
+                            </p>
                         {% else %}
-                            <div class="no-documents-message">
-                                <div class="text-center mb-4">
-                                    <i class="bi bi-file-earmark-text display-1 text-muted"></i>
-                                </div>
-                                <h3 class="text-center mb-3">No Documents Found</h3>
-                                <p class="text-center text-muted">
-                                    You haven't uploaded any documents yet. Go to the upload page to get started.
-                                </p>
-                                <div class="text-center mt-4">
-                                    <a href="{{ url_for('upload_file') }}" class="btn btn-primary">
-                                        <i class="bi bi-upload"></i> Upload Document
-                                    </a>
-                                </div>
-                            </div>
+                            <p class="card-text text-muted">
+                                No summary available.
+                            </p>
                         {% endif %}
                     </div>
-                </div>
-                
-                <!-- Audio player modal -->
-                <div class="modal fade" id="audioPlayerModal" tabindex="-1" aria-labelledby="audioPlayerModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="audioPlayerModalLabel">Listen to Summary</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <audio controls class="w-100" id="modal-audio-player">
-                                    <source src="" type="audio/mpeg">
-                                    Your browser does not support the audio element.
-                                </audio>
-                            </div>
-                        </div>
+                    <div class="card-footer">
+                        <a href="{{ url_for('view_document', document_id=document.id) }}" 
+                           class="btn btn-primary btn-sm">View Analysis</a>
                     </div>
                 </div>
             </div>
-        </div>
+        {% endfor %}
     </div>
-    
-    <!-- Floating Action Button removed -->
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Accessibility JS -->
-    <script src="{{ url_for('static', filename='js/accessibility.js') }}"></script>
-    
-    <!-- Custom script for audio player modal -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Setup audio player modal
-            const audioPlayerModal = new bootstrap.Modal(document.getElementById('audioPlayerModal'));
-            const modalAudioPlayer = document.getElementById('modal-audio-player');
-            
-            // Add click handlers for play audio buttons
-            document.querySelectorAll('.play-audio').forEach(button => {
-                button.addEventListener('click', function() {
-                    modalAudioPlayer.src = this.getAttribute('data-audio-url');
-                    audioPlayerModal.show();
-                    modalAudioPlayer.load();
-                    modalAudioPlayer.play();
-                });
-            });
-            
-            // Pause audio when modal is closed
-            document.getElementById('audioPlayerModal').addEventListener('hidden.bs.modal', function () {
-                modalAudioPlayer.pause();
-            });
-        });
-    </script>
-</body>
-</html>
+{% else %}
+    <div class="alert alert-info">
+        <p class="mb-0">You haven't uploaded any documents yet.</p>
+    </div>
+    <div class="text-center my-5">
+        <img src="{{ url_for('static', filename='images/empty.svg') }}" 
+             alt="No documents" style="max-width: 200px; margin-bottom: 20px;">
+        <h3>Get started by uploading your first document</h3>
+        <p class="text-muted">Upload PDFs or DOCX files to analyze them with AI.</p>
+        <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg mt-2">
+            <i class="bi bi-upload"></i> Upload Document
+        </a>
+    </div>
+{% endif %}
+{% endblock %}

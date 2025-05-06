@@ -1,0 +1,190 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ document.filename }} - Analysis{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 no-print">
+    <h1>Document Analysis</h1>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Dashboard
+    </a>
+</div>
+
+<div class="alert alert-info no-print">
+    <strong>File:</strong> {{ document.filename }} 
+    <small class="text-muted">(Uploaded on {{ document.upload_time }})</small>
+</div>
+
+<div class="row">
+    <!-- Chat Panel -->
+    <div class="col-lg-4 mb-4 no-print">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h2 class="h5 mb-0">Chat with AI about this Document</h2>
+            </div>
+            <div class="card-body d-flex flex-column p-0">
+                <div id="chat-messages" class="chat-container p-3">
+                    {% if chat_messages|length > 0 %}
+                        {% for message in chat_messages %}
+                            <div class="chat-message {% if message.message_type == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                                <div class="message-header small mb-1">
+                                    <strong>{% if message.message_type == 'user' %}You{% else %}AI Assistant{% endif %}</strong>
+                                </div>
+                                <div class="message-content">{{ message.content|nl2br }}</div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted my-4">
+                            <p>Ask questions about the document content.</p>
+                            <p>The AI will answer based only on what's in the document.</p>
+                        </div>
+                    {% endif %}
+                    <div id="loading-message" class="chat-message assistant-message d-none">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span>Thinking...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-auto p-3 border-top">
+                    <form id="chat-form" class="d-flex">
+                        <input type="text" id="user-message" class="form-control" 
+                               placeholder="Ask about the document..." required>
+                        <button type="submit" class="btn btn-primary ms-2">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Summary Panel -->
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">Document Summary</h2>
+                <div class="no-print">
+                    <button id="print-summary" class="btn btn-sm btn-light me-2">
+                        <i class="bi bi-printer"></i> Print Summary
+                    </button>
+                    <a href="{{ url_for('download_summary', document_id=document.id) }}" 
+                       class="btn btn-sm btn-light">
+                        <i class="bi bi-download"></i> Download
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="summary-content" class="summary-container">
+                    {{ document.summary|nl2br }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print-only version -->
+<div class="d-none print-only">
+    <div class="text-center mb-4">
+        <h1>Document Summary</h1>
+        <p>{{ document.filename }}</p>
+        <p>Generated on: {{ document.upload_time }}</p>
+    </div>
+    <div class="summary-content">
+        {{ document.summary|nl2br }}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatForm = document.getElementById('chat-form');
+        const userMessageInput = document.getElementById('user-message');
+        const chatMessagesContainer = document.getElementById('chat-messages');
+        const loadingMessage = document.getElementById('loading-message');
+        const printSummaryBtn = document.getElementById('print-summary');
+        
+        // Auto-scroll chat to bottom
+        function scrollToBottom() {
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+        scrollToBottom();
+        
+        // Handle chat form submission
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const userMessage = userMessageInput.value.trim();
+            if (!userMessage) return;
+            
+            // Clear input
+            userMessageInput.value = '';
+            
+            // Add user message to chat
+            addMessageToChat('user', userMessage);
+            
+            // Show loading indicator
+            loadingMessage.classList.remove('d-none');
+            scrollToBottom();
+            
+            try {
+                // Send request to backend
+                const response = await fetch('/api/chat/{{ document.id }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userMessage })
+                });
+                
+                // Hide loading indicator
+                loadingMessage.classList.add('d-none');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Add AI response to chat
+                    addMessageToChat('assistant', data.ai_response.content);
+                } else {
+                    // Add error message
+                    const errorData = await response.json();
+                    addMessageToChat('assistant', 'Error: ' + (errorData.error || 'Failed to get response'));
+                }
+            } catch (error) {
+                // Hide loading indicator
+                loadingMessage.classList.add('d-none');
+                // Add error message
+                addMessageToChat('assistant', 'Error: Could not connect to server');
+                console.error('Error:', error);
+            }
+        });
+        
+        // Add message to chat
+        function addMessageToChat(type, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${type === 'user' ? 'user-message' : 'assistant-message'}`;
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header small mb-1';
+            headerDiv.innerHTML = `<strong>${type === 'user' ? 'You' : 'AI Assistant'}</strong>`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerText = content;
+            
+            messageDiv.appendChild(headerDiv);
+            messageDiv.appendChild(contentDiv);
+            
+            // Add before loading indicator
+            chatMessagesContainer.insertBefore(messageDiv, loadingMessage);
+            scrollToBottom();
+        }
+        
+        // Print summary
+        printSummaryBtn.addEventListener('click', function() {
+            window.print();
+        });
+    });
+</script>
+{% endblock %}
