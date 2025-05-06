@@ -257,8 +257,11 @@
                        class="btn btn-sm btn-light me-2">
                         <i class="bi bi-download"></i> Download
                     </a>
-                    <button id="generate-flashcards" class="btn btn-sm btn-info">
+                    <button id="generate-flashcards" class="btn btn-sm btn-info me-2">
                         <i class="bi bi-card-heading"></i> Generate Flashcards
+                    </button>
+                    <button id="generate-quiz" class="btn btn-sm btn-success">
+                        <i class="bi bi-question-circle"></i> Generate Quiz
                     </button>
                 </div>
             </div>
@@ -709,6 +712,52 @@
                 if (tipsCollapseIcon) {
                     tipsCollapseIcon.classList.remove('bi-chevron-down');
                     tipsCollapseIcon.classList.add('bi-chevron-up');
+                }
+            });
+        }
+        
+        // Handle quiz generation
+        const generateQuizBtn = document.getElementById('generate-quiz');
+        if (generateQuizBtn) {
+            generateQuizBtn.addEventListener('click', async function() {
+                // Disable button and show loading state
+                const originalBtnContent = generateQuizBtn.innerHTML;
+                generateQuizBtn.disabled = true;
+                generateQuizBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+                
+                try {
+                    // Call API to generate quiz
+                    const response = await fetch('/api/quiz/{{ document.id }}', {
+                        method: 'POST'
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        // If quiz generated successfully, redirect to quiz page
+                        window.location.href = '/quiz/{{ document.id }}';
+                    } else {
+                        // Handle error
+                        let errorMessage = 'Failed to generate quiz';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorMessage;
+                            if (errorData.details) {
+                                errorMessage += `: ${errorData.details}`;
+                            }
+                        } catch (parseError) {
+                            errorMessage = `Error (${response.status}): ${errorMessage}`;
+                        }
+                        
+                        // Show error alert
+                        alert(errorMessage);
+                    }
+                } catch (error) {
+                    console.error('Error generating quiz:', error);
+                    alert('Network error while generating quiz. Please try again.');
+                } finally {
+                    // Reset button
+                    generateQuizBtn.disabled = false;
+                    generateQuizBtn.innerHTML = originalBtnContent;
                 }
             });
         }

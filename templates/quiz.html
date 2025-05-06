@@ -1,0 +1,279 @@
+{% extends "layout.html" %}
+
+{% block title %}Quiz for {{ document.filename }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('view_document', document_id=document.id) }}">{{ document.filename }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Quiz</li>
+                </ol>
+            </nav>
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0">Quiz: {{ document.filename }}</h1>
+                    <a href="{{ url_for('view_document', document_id=document.id) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left"></i> Back to Document
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if quiz_questions and quiz_questions|length > 0 %}
+                        <div id="quiz-container">
+                            <form id="quiz-form">
+                                {% for question in quiz_questions %}
+                                    <div class="quiz-question card mb-4">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Question {{ loop.index }}:</h5>
+                                            <p class="card-text">{{ question.question }}</p>
+                                            
+                                            <div class="options mt-3">
+                                                {% for option_key, option_value in question.options.items() %}
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="radio" 
+                                                            name="question-{{ loop.parent.index0 }}" 
+                                                            id="q{{ loop.parent.index0 }}-{{ option_key }}" 
+                                                            value="{{ option_key }}">
+                                                        <label class="form-check-label" for="q{{ loop.parent.index0 }}-{{ option_key }}">
+                                                            <strong>{{ option_key }}:</strong> {{ option_value }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-check-circle"></i> Submit Answers
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <div id="quiz-results" class="d-none">
+                            <div class="alert alert-info mb-4">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h4 class="mb-0">Your Score: <span id="score-value">0</span>%</h4>
+                                    <button id="retake-quiz" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-arrow-repeat"></i> Retake Quiz
+                                    </button>
+                                </div>
+                                <div class="progress mt-2">
+                                    <div id="score-progress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <div id="results-container">
+                                <!-- Results will be displayed here -->
+                            </div>
+                        </div>
+                        
+                    {% else %}
+                        <div class="text-center py-5">
+                            <div class="mb-4">
+                                <i class="bi bi-question-circle" style="font-size: 4rem;"></i>
+                            </div>
+                            <h2 class="mb-3">No Quiz Available</h2>
+                            <p class="lead mb-4">Generate a quiz to test your knowledge of this document.</p>
+                            <button id="generate-quiz-btn" class="btn btn-primary">
+                                <i class="bi bi-lightning-charge"></i> Generate Quiz
+                            </button>
+                            <div id="quiz-loading" class="mt-3 d-none">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2">Generating quiz questions from document content...</p>
+                            </div>
+                        </div>
+                        
+                        <div id="quiz-error" class="alert alert-danger mt-3 d-none" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill"></i> 
+                            <span id="quiz-error-message">An error occurred while generating the quiz.</span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Generate quiz button
+    const generateBtn = document.getElementById('generate-quiz-btn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', function() {
+            generateQuiz();
+        });
+    }
+    
+    // Quiz form submission
+    const quizForm = document.getElementById('quiz-form');
+    if (quizForm) {
+        quizForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitQuiz();
+        });
+    }
+    
+    // Retake quiz button
+    const retakeBtn = document.getElementById('retake-quiz');
+    if (retakeBtn) {
+        retakeBtn.addEventListener('click', function() {
+            document.getElementById('quiz-container').classList.remove('d-none');
+            document.getElementById('quiz-results').classList.add('d-none');
+        });
+    }
+});
+
+function generateQuiz() {
+    const loadingEl = document.getElementById('quiz-loading');
+    const errorEl = document.getElementById('quiz-error');
+    const generateBtn = document.getElementById('generate-quiz-btn');
+    
+    // Show loading spinner
+    loadingEl.classList.remove('d-none');
+    errorEl.classList.add('d-none');
+    generateBtn.disabled = true;
+    
+    // Send request to generate quiz
+    fetch('/api/quiz/{{ document.id }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Reload the page to show the quiz
+            window.location.reload();
+        } else {
+            // Show error message
+            errorEl.classList.remove('d-none');
+            document.getElementById('quiz-error-message').textContent = data.error || 'Failed to generate quiz.';
+        }
+    })
+    .catch(error => {
+        console.error('Error generating quiz:', error);
+        errorEl.classList.remove('d-none');
+        document.getElementById('quiz-error-message').textContent = 'Network error. Please try again.';
+    })
+    .finally(() => {
+        loadingEl.classList.add('d-none');
+        generateBtn.disabled = false;
+    });
+}
+
+function submitQuiz() {
+    // Collect user answers
+    const answers = {};
+    const questions = document.querySelectorAll('.quiz-question');
+    
+    questions.forEach((question, index) => {
+        const selectedOption = document.querySelector(`input[name="question-${index}"]:checked`);
+        answers[index] = selectedOption ? selectedOption.value : null;
+    });
+    
+    // Check if all questions are answered
+    const unansweredCount = Object.values(answers).filter(val => val === null).length;
+    if (unansweredCount > 0) {
+        alert(`Please answer all questions. You have ${unansweredCount} unanswered question(s).`);
+        return;
+    }
+    
+    // Submit answers
+    fetch('/api/quiz/submit/{{ document.id }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ answers: answers })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResults(data.results, data.score);
+        } else {
+            alert(data.error || 'Failed to submit quiz.');
+        }
+    })
+    .catch(error => {
+        console.error('Error submitting quiz:', error);
+        alert('Network error. Please try again.');
+    });
+}
+
+function showResults(results, score) {
+    // Hide quiz form, show results
+    document.getElementById('quiz-container').classList.add('d-none');
+    document.getElementById('quiz-results').classList.remove('d-none');
+    
+    // Update score display
+    document.getElementById('score-value').textContent = score.percentage;
+    const progressBar = document.getElementById('score-progress');
+    progressBar.style.width = `${score.percentage}%`;
+    
+    // Set progress bar color based on score
+    if (score.percentage >= 80) {
+        progressBar.classList.add('bg-success');
+    } else if (score.percentage >= 60) {
+        progressBar.classList.add('bg-info');
+    } else if (score.percentage >= 40) {
+        progressBar.classList.add('bg-warning');
+    } else {
+        progressBar.classList.add('bg-danger');
+    }
+    
+    // Generate results HTML
+    const resultsContainer = document.getElementById('results-container');
+    resultsContainer.innerHTML = '';
+    
+    results.forEach((result, index) => {
+        const resultHtml = `
+            <div class="card mb-3 ${result.is_correct ? 'border-success' : 'border-danger'}">
+                <div class="card-header ${result.is_correct ? 'bg-success text-white' : 'bg-danger text-white'}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Question ${index + 1}</span>
+                        <span>${result.is_correct ? '<i class="bi bi-check-circle"></i> Correct' : '<i class="bi bi-x-circle"></i> Incorrect'}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">${result.question}</h5>
+                    <div class="options mt-3">
+                        ${Object.entries(result.options).map(([key, value]) => {
+                            let classes = 'list-group-item';
+                            if (key === result.correct_choice) {
+                                classes += ' list-group-item-success';
+                            } else if (key === result.user_choice && !result.is_correct) {
+                                classes += ' list-group-item-danger';
+                            }
+                            return `
+                                <div class="${classes}">
+                                    <strong>${key}:</strong> ${value}
+                                    ${key === result.correct_choice ? ' <i class="bi bi-check-circle-fill text-success"></i>' : ''}
+                                    ${key === result.user_choice && !result.is_correct ? ' <i class="bi bi-x-circle-fill text-danger"></i>' : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        resultsContainer.innerHTML += resultHtml;
+    });
+    
+    // Scroll to results
+    document.getElementById('quiz-results').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+{% endblock %}
